@@ -14,7 +14,7 @@ def main(args):
     image = Image.open(image_path)
     lowpolyfier = LowPolyfier()
     low_poly_image = lowpolyfier.lowpolyfy(image)
-    low_poly_image.save(output_path)
+    low_poly_image.save(output_path, quality=100)
 
 
 if __name__ == "__main__":
