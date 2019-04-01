@@ -4,8 +4,8 @@ This module does the heavy lifting and is responsible for converting the input i
 import cv2
 from PIL import Image
 import numpy as np
+import time
 from scipy import spatial
-import dlib
 
 
 # Data flow
@@ -48,19 +48,25 @@ class LowPolyfier:
                     print("Image dims: {}".format(image.shape))
                     raise e
 
+    def visualize_image(self, image: np.ndarray):
+        cv2.imshow(str(time.time()), image)
+        cv2.waitKey(0)
+
     def visualize_points(self, image: np.ndarray, points: np.ndarray):
-        points = np.squeeze(np.split(points, 2, axis=1))
-        print(image[points])
-        print(points)
+        image = image.copy()
+        image //= 2
+        points = (*np.squeeze(np.split(points, 2, axis=1))[::-1],)
+        image[points] = (0, 255, 0)
+        self.visualize_image(image)
 
     def visualize_canny(self, image: np.ndarray, canny: np.ndarray):
-        overlay = image + np.minimum(255 - image, cv2.cvtColor(canny, cv2.COLOR_GRAY2BGR))
-        cv2.imshow('canny', overlay)
-        cv2.waitKey(0)
+        image = image.copy()
+        image[np.where(canny)] = (0, 255, 0)
+        self.visualize_image(image)
 
     def get_canny_points(self, image: np.ndarray, low_thresh: int, high_thresh: int, num_points=500) -> np.ndarray:
         canny = cv2.Canny(image, low_thresh, high_thresh)
-        self.visualize_canny(image, canny)
+        # self.visualize_canny(image, canny)
         canny_points = np.argwhere(canny)[..., ::-1]
         random_sample = np.random.choice(canny_points.shape[0], size=num_points, replace=False)
         canny_points = canny_points[random_sample]
@@ -90,7 +96,7 @@ class LowPolyfier:
             points[replace_indices] = self.get_random_points(image, num_points=num_random_points)
 
     def get_keypoints(self, image: np.ndarray) -> np.ndarray:
-        random_points_ratio = self.options.get('random_points_ratio', 0)
+        random_points_ratio = self.options.get('random_points_ratio', 0.05)
         num_canny_points = self.options.get('num_canny_points', 500)
         num_laplace_points = self.options.get('num_laplace_points', 500)
         corners = np.array([
@@ -104,7 +110,7 @@ class LowPolyfier:
         points = np.concatenate((canny_points, laplace_points))
         self.randomize_points(image, points, random_points_ratio)
         points = np.concatenate((points, corners))
-        self.visualize_points(image, points)
+        # self.visualize_points(image, points)
         print("Num keypoints", len(points))
         return points
 
@@ -132,6 +138,11 @@ class LowPolyfier:
         return output_image
 
     def postprocess(self, image: np.ndarray) -> np.ndarray:
+        # saturation
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        # contrast
+
         return image
 
     def lowpolyfy(self, image):
