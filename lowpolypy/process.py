@@ -36,35 +36,27 @@ class LowPolyfier:
         # image = cv2.bilateralFilter(image, 9, 200, 200)
         return image
 
-    def check_bounds(self, image, polygons):
-        height, width = image.shape[:2]
-        for polygon in polygons:
-            for point in polygon:
-                try:
-                    assert 0 <= point[0] < width
-                    assert 0 <= point[1] < height
-                except AssertionError as e:
-                    print("(X, Y) = {}, {}".format(point[0], point[1]))
-                    print("Image dims: {}".format(image.shape))
-                    raise e
-
-    def visualize_image(self, image: np.ndarray):
-        cv2.imshow(str(time.time()), image)
+    @staticmethod
+    def visualize_image(image: np.ndarray, name=None):
+        name = name or str(time.time())
+        cv2.imshow(name, image)
         cv2.waitKey(0)
 
-    def visualize_points(self, image: np.ndarray, points: np.ndarray):
+    def visualize_points(self, image: np.ndarray, points: np.ndarray, name=None):
         image = image.copy()
         image //= 2
         points = (*np.squeeze(np.split(points, 2, axis=1))[::-1],)
         image[points] = (0, 255, 0)
-        self.visualize_image(image)
+        self.visualize_image(image, name=name)
 
     def visualize_canny(self, image: np.ndarray, canny: np.ndarray):
         image = image.copy()
         image[np.where(canny)] = (0, 255, 0)
-        self.visualize_image(image)
+        self.visualize_image(image, name='canny')
 
     def get_random_points(self, image: np.ndarray, num_points=100) -> np.ndarray:
+        if num_points <= 0:
+            return np.zeros((0, 2), dtype=np.uint8)
         return np.array([np.random.uniform((0, 0), image.shape[:2]).astype(np.uint16)[::-1] for _ in range(num_points)])
 
     def get_canny_points(self, image: np.ndarray, low_thresh: int, high_thresh: int, num_points=500) -> np.ndarray:
@@ -78,6 +70,8 @@ class LowPolyfier:
         return canny_points
 
     def get_laplace_points(self, image: np.ndarray, num_points=500) -> np.ndarray:
+        if num_points <= 0:
+            return np.zeros((0, 2), dtype=np.uint8)
         image = cv2.GaussianBlur(image, (15, 15), 0)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         image = cv2.Laplacian(image, cv2.CV_8U, 19)
@@ -97,10 +91,22 @@ class LowPolyfier:
             replace_indices = np.random.uniform(0, len(points), num_random_points).astype(np.uint16)
             points[replace_indices] = self.get_random_points(image, num_points=num_random_points)
 
+    def jiggle_keypoints(self, image: np.ndarray, points: np.ndarray, min_ratio: float = 0,
+                         max_ratio: float = 0.01) -> None:
+        ratios = np.random.uniform(min_ratio, max_ratio, points.shape)
+        jiggles = (image.shape[:2] * ratios).astype(np.int16)
+        signs = np.random.random_sample(points.shape) > 0.5
+        jiggles[signs] *= -1
+        points += jiggles
+        self.constrain_points(image, points)
+
     def get_keypoints(self, image: np.ndarray) -> np.ndarray:
-        random_points_ratio = self.options.get('random_points_ratio', 0)
+        random_replace_ratio = self.options.get('random_replace_ratio', 0)
+        num_random_points = self.options.get('num_random_points', 80)
         num_canny_points = self.options.get('num_canny_points', 1000)
         num_laplace_points = self.options.get('num_laplace_points', 0)
+        jiggle_min_ratio = self.options.get('jiggle_min_ratio', 0)
+        jiggle_max_ratio = self.options.get('jiggle_max_ratio', 0.003)
         corners = np.array([
             (0, 0),  # top left
             (image.shape[1] - 1, 0),  # top right
@@ -109,24 +115,45 @@ class LowPolyfier:
         ])
         canny_points = self.get_canny_points(image, 180, 200, num_points=num_canny_points)
         laplace_points = self.get_laplace_points(image, num_points=num_laplace_points)
-        points = np.concatenate((canny_points, laplace_points))
-        self.randomize_points(image, points, random_points_ratio)
+        random_points = self.get_random_points(image, num_random_points)
+        points = np.concatenate((canny_points, laplace_points, random_points))
+        self.randomize_points(image, points, random_replace_ratio)
+        self.jiggle_keypoints(image, points, min_ratio=jiggle_min_ratio, max_ratio=jiggle_max_ratio)
         points = np.concatenate((points, corners))
-        self.visualize_points(image, points)
+        # self.visualize_points(image, points)
         print("Num keypoints", len(points))
         return points
 
-    def validate_polygons(self, polygons: np.ndarray):
-        assert len(polygons.shape) == 3
-        assert polygons.shape[1] >= 3
-        assert polygons.shape[2] == 2
+    @staticmethod
+    def validate_points(image: np.ndarray, points: np.ndarray):
+        assert len(points.shape) == 3
+        assert points.shape[1] >= 3
+        assert points.shape[2] == 2
+        height, width = image.shape[:2]
+        try:
+            assert points[..., 0].min() >= 0
+            assert points[..., 1].min() >= 0
+            assert points[..., 0].max() < width
+            assert points[..., 1].max() < height
+        except AssertionError as e:
+            print("(Xmin, Ymin, Xmax, Ymax) = ({}, {}, {}, {})".format(points[..., 0].min(), points[..., 1].min(),
+                                                                       points[..., 0].max(), points[..., 1].max()))
+            print("Image dims: {}".format(image.shape))
+            raise e
+
+    @staticmethod
+    def constrain_points(image: np.ndarray, points: np.ndarray):
+        height, width = image.shape[:2]
+        points[..., 0][points[..., 0] < 0] = 0
+        points[..., 0][points[..., 0] >= width] = width - 1
+        points[..., 1][points[..., 1] < 0] = 0
+        points[..., 1][points[..., 1] >= height] = height - 1
 
     def get_polygons(self, image: np.ndarray) -> np.ndarray:
         points = self.get_keypoints(image)
         delaunay = spatial.Delaunay(points)
         polygons = np.array([[points[i] for i in simplex] for simplex in delaunay.simplices])
-        self.validate_polygons(polygons)
-        self.check_bounds(image, polygons)
+        self.validate_points(image, polygons)
         return polygons
 
     def shade(self, polygons: np.ndarray, image: np.ndarray) -> np.ndarray:
@@ -139,12 +166,24 @@ class LowPolyfier:
             cv2.fillConvexPoly(output_image, polygon.astype(np.int32), mean, lineType=cv2.LINE_AA)
         return output_image
 
-    def postprocess(self, image: np.ndarray) -> np.ndarray:
-        # saturation
+    @staticmethod
+    def saturation(image: np.ndarray, alpha: float, beta: float):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        hsv[..., 1] = cv2.convertScaleAbs(hsv[..., 1], alpha=alpha, beta=beta)
+        image = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        return image
 
-        # contrast
+    @staticmethod
+    def brightness_contrast(image: np.ndarray, alpha, beta):
+        image = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+        return image
 
+    def postprocess(self, image: np.ndarray) -> np.ndarray:
+        saturation = self.options.get('saturation', 0.25)
+        contrast = self.options.get('contrast', 0.2)
+        brightness = self.options.get('brightness', -0.08)
+        image = self.saturation(image, 1 + saturation, 0)
+        image = self.brightness_contrast(image, 1 + contrast, 255 * brightness)
         return image
 
     def lowpolyfy(self, image):
