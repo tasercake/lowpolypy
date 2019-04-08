@@ -16,7 +16,7 @@ from scipy import spatial
 
 class LowPolyfier:
     def __init__(self, **kwargs):
-        self.options = kwargs
+        self.options = {k: v for k, v in kwargs.items() if v is not None}
 
     def rescale_image(self, image: np.ndarray, longest_edge: int):
         height, width = image.shape[:2]
@@ -31,7 +31,7 @@ class LowPolyfier:
         return cv2.resize(image, (new_width, new_height))
 
     def preprocess(self, image: np.ndarray) -> np.ndarray:
-        longest_edge = self.options.get('longest_edge', 600)
+        longest_edge = self.options['longest_edge']
         image = self.rescale_image(image, longest_edge)
         # image = cv2.bilateralFilter(image, 9, 200, 200)
         return image
@@ -63,7 +63,8 @@ class LowPolyfier:
         if num_points <= 0:
             return np.zeros((0, 2), dtype=np.uint8)
         canny = cv2.Canny(image, low_thresh, high_thresh)
-        # self.visualize_canny(image, canny)
+        if self.options['visualize_canny']:
+            self.visualize_canny(image, canny)
         canny_points = np.argwhere(canny)[..., ::-1]
         step_size = len(canny_points) // num_points
         canny_points = canny_points[::step_size]
@@ -78,6 +79,8 @@ class LowPolyfier:
         image = cv2.GaussianBlur(image, (15, 15), 0)
         image = (image * (255 / image.max())).astype(np.uint8)
         image = image.astype(np.float32) / image.sum()
+        if self.options['visualize_laplace']:
+            self.visualize_image(image, 'laplace')
         weights = np.ravel(image)
         coordinates = np.arange(0, weights.size, dtype=np.uint32)
         choices = np.random.choice(coordinates, size=num_points, replace=False, p=weights)
@@ -101,27 +104,30 @@ class LowPolyfier:
         self.constrain_points(image, points)
 
     def get_keypoints(self, image: np.ndarray) -> np.ndarray:
-        random_replace_ratio = self.options.get('random_replace_ratio', 0)
-        num_random_points = self.options.get('num_random_points', 80)
-        num_canny_points = self.options.get('num_canny_points', 1000)
-        num_laplace_points = self.options.get('num_laplace_points', 0)
-        jiggle_min_ratio = self.options.get('jiggle_min_ratio', 0)
-        jiggle_max_ratio = self.options.get('jiggle_max_ratio', 0.003)
+        canny_low_threshold = self.options['canny_low_threshold']
+        canny_high_threshold = self.options['canny_high_threshold']
+        random_replace_ratio = self.options['random_replace_ratio']
+        num_random_points = self.options['num_random_points']
+        num_canny_points = self.options['num_canny_points']
+        num_laplace_points = self.options['num_laplace_points']
+        jiggle_min_ratio = self.options['jiggle_min_ratio']
+        jiggle_max_ratio = self.options['jiggle_max_ratio']
         corners = np.array([
             (0, 0),  # top left
             (image.shape[1] - 1, 0),  # top right
             (0, image.shape[0] - 1),  # bottom left
             (image.shape[1] - 1, image.shape[0] - 1)  # bottom right
         ])
-        canny_points = self.get_canny_points(image, 180, 200, num_points=num_canny_points)
+        canny_points = self.get_canny_points(image, canny_low_threshold, canny_high_threshold,
+                                             num_points=num_canny_points)
         laplace_points = self.get_laplace_points(image, num_points=num_laplace_points)
         random_points = self.get_random_points(image, num_random_points)
         points = np.concatenate((canny_points, laplace_points, random_points))
         self.randomize_points(image, points, random_replace_ratio)
         self.jiggle_keypoints(image, points, min_ratio=jiggle_min_ratio, max_ratio=jiggle_max_ratio)
         points = np.concatenate((points, corners))
-        # self.visualize_points(image, points)
-        print("Num keypoints", len(points))
+        if self.options['visualize_points']:
+            self.visualize_points(image, points)
         return points
 
     @staticmethod
@@ -179,9 +185,9 @@ class LowPolyfier:
         return image
 
     def postprocess(self, image: np.ndarray) -> np.ndarray:
-        saturation = self.options.get('saturation', 0.25)
-        contrast = self.options.get('contrast', 0.2)
-        brightness = self.options.get('brightness', -0.08)
+        saturation = self.options['post_saturation']
+        contrast = self.options['post_contrast']
+        brightness = self.options['post_brightness']
         image = self.saturation(image, 1 + saturation, 0)
         image = self.brightness_contrast(image, 1 + contrast, 255 * brightness)
         return image
