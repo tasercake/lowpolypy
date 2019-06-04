@@ -41,6 +41,7 @@ def experiment(options: dict) -> Dict[str, dict]:
     for opts in iter_options(OPTIONS):
         opts['image_paths'] = [image_path]
         opts['output_dir'] = output_dir
+        print(opts)
         result = pool.apply_async(run, (opts,))
         results.append(result)
     pool.close()

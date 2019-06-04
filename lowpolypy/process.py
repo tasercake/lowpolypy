@@ -2,6 +2,7 @@
 This module does the heavy lifting and is responsible for converting the input image into a low-poly stylized image.
 """
 import cv2
+import pytess
 from PIL import Image
 import numpy as np
 import time
@@ -18,7 +19,8 @@ class LowPolyfier:
     def __init__(self, **kwargs):
         self.options = {k: v for k, v in kwargs.items() if v is not None}
 
-    def rescale_image(self, image: np.ndarray, longest_edge: int):
+    @staticmethod
+    def rescale_image(image: np.ndarray, longest_edge: int):
         height, width = image.shape[:2]
         if height >= width:
             ratio = longest_edge / height
@@ -31,8 +33,15 @@ class LowPolyfier:
         return cv2.resize(image, (new_width, new_height))
 
     def preprocess(self, image: np.ndarray) -> np.ndarray:
+        if image.shape[-1] == 4:
+            float_image = image.astype(np.float64) / 255.0
+            float_image[..., :3] *= float_image[..., -1, np.newaxis]
+            float_image = float_image[..., :3]
+            image = (float_image * 255).astype(np.uint8)
+        image = image[..., ::-1]
         longest_edge = self.options['longest_edge']
-        image = self.rescale_image(image, longest_edge)
+        if longest_edge != 'auto':
+            image = self.rescale_image(image, longest_edge)
         # image = cv2.bilateralFilter(image, 9, 200, 200)
         return image
 
@@ -54,7 +63,8 @@ class LowPolyfier:
         image[np.where(canny)] = (0, 255, 0)
         self.visualize_image(image, name='canny')
 
-    def get_random_points(self, image: np.ndarray, num_points=100) -> np.ndarray:
+    @staticmethod
+    def get_random_points(image: np.ndarray, num_points=100) -> np.ndarray:
         if num_points <= 0:
             return np.zeros((0, 2), dtype=np.uint8)
         return np.array([np.random.uniform((0, 0), image.shape[:2]).astype(np.uint16)[::-1] for _ in range(num_points)])
@@ -103,7 +113,7 @@ class LowPolyfier:
         points += jiggles
         self.constrain_points(image, points)
 
-    def get_keypoints(self, image: np.ndarray) -> np.ndarray:
+    def get_keypoints(self, image: np.ndarray, include_corners=True) -> np.ndarray:
         canny_low_threshold = self.options['canny_low_threshold']
         canny_high_threshold = self.options['canny_high_threshold']
         random_replace_ratio = self.options['random_replace_ratio']
@@ -112,12 +122,7 @@ class LowPolyfier:
         num_laplace_points = self.options['num_laplace_points']
         jiggle_min_ratio = self.options['jiggle_min_ratio']
         jiggle_max_ratio = self.options['jiggle_max_ratio']
-        corners = np.array([
-            (0, 0),  # top left
-            (image.shape[1] - 1, 0),  # top right
-            (0, image.shape[0] - 1),  # bottom left
-            (image.shape[1] - 1, image.shape[0] - 1)  # bottom right
-        ])
+        # TODO: add points to image edges
         canny_points = self.get_canny_points(image, canny_low_threshold, canny_high_threshold,
                                              num_points=num_canny_points)
         laplace_points = self.get_laplace_points(image, num_points=num_laplace_points)
@@ -125,7 +130,14 @@ class LowPolyfier:
         points = np.concatenate((canny_points, laplace_points, random_points))
         self.randomize_points(image, points, random_replace_ratio)
         self.jiggle_keypoints(image, points, min_ratio=jiggle_min_ratio, max_ratio=jiggle_max_ratio)
-        points = np.concatenate((points, corners))
+        if include_corners:
+            corners = np.array([
+                (0, 0),  # top left
+                (image.shape[1] - 1, 0),  # top right
+                (0, image.shape[0] - 1),  # bottom left
+                (image.shape[1] - 1, image.shape[0] - 1)  # bottom right
+            ])
+            points = np.concatenate((points, corners))
         if self.options['visualize_points']:
             self.visualize_points(image, points)
         return points
@@ -142,6 +154,7 @@ class LowPolyfier:
             assert points[..., 0].max() < width
             assert points[..., 1].max() < height
         except AssertionError as e:
+            print("ERROR: Some polygon coordinates are out of image bounds. This is a bug. Please report this.")
             print("(Xmin, Ymin, Xmax, Ymax) = ({}, {}, {}, {})".format(points[..., 0].min(), points[..., 1].min(),
                                                                        points[..., 0].max(), points[..., 1].max()))
             print("Image dims: {}".format(image.shape))
@@ -154,22 +167,115 @@ class LowPolyfier:
         points[..., 0][points[..., 0] >= width] = width - 1
         points[..., 1][points[..., 1] < 0] = 0
         points[..., 1][points[..., 1] >= height] = height - 1
+        return points
+
+    @staticmethod
+    def voronoi_polygons(vor, radius=None):
+        """
+        Reconstruct infinite voronoi regions in a 2D diagram to finite regions.
+
+        Args:
+            vor:
+            radius:
+
+        Returns:
+
+        """
+
+        if vor.points.shape[1] != 2:
+            raise ValueError("Requires 2D input")
+
+        new_regions = []
+        new_vertices = vor.vertices.tolist()
+
+        center = vor.points.mean(axis=0)
+        if radius is None:
+            radius = vor.points.ptp().max()
+
+        # Construct a map containing all ridges for a given point
+        all_ridges = {}
+        for (p1, p2), (v1, v2) in zip(vor.ridge_points, vor.ridge_vertices):
+            all_ridges.setdefault(p1, []).append((p2, v1, v2))
+            all_ridges.setdefault(p2, []).append((p1, v1, v2))
+
+        # Reconstruct infinite regions
+        for p1, region in enumerate(vor.point_region):
+            vertices = vor.regions[region]
+
+            if all(v >= 0 for v in vertices):
+                # finite region
+                new_regions.append(vertices)
+                continue
+
+            # reconstruct a non-finite region
+            ridges = all_ridges[p1]
+            new_region = [v for v in vertices if v >= 0]
+
+            for p2, v1, v2 in ridges:
+                if v2 < 0:
+                    v1, v2 = v2, v1
+                if v1 >= 0:
+                    # finite ridge: already in the region
+                    continue
+
+                # Compute the missing endpoint of an infinite ridge
+                t = vor.points[p2] - vor.points[p1]  # tangent
+                t /= np.linalg.norm(t)
+                n = np.array([-t[1], t[0]])  # normal
+
+                midpoint = vor.points[[p1, p2]].mean(axis=0)
+                direction = np.sign(np.dot(midpoint - center, n)) * n
+                far_point = vor.vertices[v2] + direction * radius
+
+                new_region.append(len(new_vertices))
+                new_vertices.append(far_point.tolist())
+
+            # sort region counterclockwise
+            vs = np.asarray([new_vertices[v] for v in new_region])
+            c = vs.mean(axis=0)
+            angles = np.arctan2(vs[:, 1] - c[1], vs[:, 0] - c[0])
+            new_region = np.array(new_region)[np.argsort(angles)]
+
+            # finish
+            new_regions.append(new_region.tolist())
+
+        return new_regions, np.array(new_vertices, dtype=np.int32)
 
     def get_polygons(self, image: np.ndarray) -> np.ndarray:
-        points = self.get_keypoints(image)
-        delaunay = spatial.Delaunay(points)
-        polygons = np.array([[points[i] for i in simplex] for simplex in delaunay.simplices])
+        polygon_method = self.options['polygon_method']
+        if polygon_method == 'delaunay':
+            points = self.get_keypoints(image)
+            delaunay = spatial.Delaunay(points)
+            polygons = np.array([[points[i] for i in simplex] for simplex in delaunay.simplices])
+        elif polygon_method == 'voronoi':
+            points = self.get_keypoints(image, include_corners=False)
+            polygons = [p[1] for p in pytess.voronoi(points)]
+            print(max([len(p) for p in polygons]))
+            self.visualize_points(image, np.array(polygons[1]))
+            # voronoi = spatial.Voronoi(points)
+            # regions, vertices = self.voronoi_polygons(voronoi)
+            # print(vertices)
+            # print(regions)
+        else:
+            raise ValueError(f"Unknown Polygonization method '{polygon_method}'")
         self.validate_points(image, polygons)
         return polygons
 
+    def get_output_dimensions(self, image):
+        longest_edge = self.options['output_size']
+        ratio = image.shape[1] / image.shape[0]
+        return int(longest_edge / ratio), longest_edge, 3
+
     def shade(self, polygons: np.ndarray, image: np.ndarray) -> np.ndarray:
-        output_image = np.zeros(image.shape, dtype=np.uint8)
-        # TODO: parallelize this
-        for polygon in polygons:
+        canvas_dimensions = self.get_output_dimensions(image)
+        scale_factor = max(canvas_dimensions) / max(image.shape)
+        scaled_polygons = polygons * scale_factor
+        output_image = np.zeros(canvas_dimensions, dtype=np.uint8)
+        for polygon, scaled_polygon in zip(polygons, scaled_polygons):
             mask = np.zeros(image.shape[:2], dtype=np.uint8)
-            cv2.fillConvexPoly(mask, polygon.astype(np.int32), (255,))
+            cv2.fillConvexPoly(mask, polygon, (255,))
             mean = cv2.mean(image, mask)[:3]
-            cv2.fillConvexPoly(output_image, polygon.astype(np.int32), mean, lineType=cv2.LINE_AA)
+            cv2.fillConvexPoly(output_image, scaled_polygon.astype(np.int32), mean, lineType=cv2.LINE_AA)
         return output_image
 
     @staticmethod
@@ -193,7 +299,7 @@ class LowPolyfier:
         return image
 
     def lowpolyfy(self, image):
-        image = np.array(image)[..., ::-1].copy()
+        image = np.array(image).copy()
         pre_processed_image = self.preprocess(image)
         polygons = self.get_polygons(pre_processed_image)
         shaded_image = self.shade(polygons, pre_processed_image)
