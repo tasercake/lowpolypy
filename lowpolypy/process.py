@@ -2,7 +2,6 @@
 This module does the heavy lifting and is responsible for converting the input image into a low-poly stylized image.
 """
 import cv2
-import pytess
 from PIL import Image
 import numpy as np
 import time
@@ -52,8 +51,7 @@ class LowPolyfier:
         cv2.waitKey(0)
 
     def visualize_points(self, image: np.ndarray, points: np.ndarray, name=None):
-        image = image.copy()
-        image //= 2
+        image = image.copy() // 2
         points = (*np.squeeze(np.split(points, 2, axis=1))[::-1],)
         image[points] = (0, 255, 0)
         self.visualize_image(image, name=name)
@@ -85,7 +83,7 @@ class LowPolyfier:
             return np.zeros((0, 2), dtype=np.uint8)
         image = cv2.GaussianBlur(image, (15, 15), 0)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        image = cv2.Laplacian(image, cv2.CV_8U, 19)
+        image = np.uint8(np.absolute(cv2.Laplacian(image, cv2.CV_64F, 19)))
         image = cv2.GaussianBlur(image, (15, 15), 0)
         image = (image * (255 / image.max())).astype(np.uint8)
         image = image.astype(np.float32) / image.sum()
@@ -111,7 +109,7 @@ class LowPolyfier:
         signs = np.random.random_sample(points.shape) > 0.5
         jiggles[signs] *= -1
         points += jiggles
-        self.constrain_points(image, points)
+        self.constrain_points(image.shape[:2], points)
 
     def get_keypoints(self, image: np.ndarray, include_corners=True) -> np.ndarray:
         canny_low_threshold = self.options['canny_low_threshold']
@@ -143,30 +141,39 @@ class LowPolyfier:
         return points
 
     @staticmethod
-    def validate_points(image: np.ndarray, points: np.ndarray):
-        assert len(points.shape) == 3
-        assert points.shape[1] >= 3
-        assert points.shape[2] == 2
-        height, width = image.shape[:2]
+    def validate_polygons(max_dims: tuple, polygons):
+        height, width = max_dims
+        if isinstance(polygons, np.ndarray):
+            assert len(polygons.shape) == 3
+            assert polygons.shape[1] >= 3
+            assert polygons.shape[2] == 2
+        elif isinstance(polygons, list):
+            raise NotImplementedError(
+                "Expressing polygons as a list is currently unsupported. "
+                "Convert it to a numpy array instead."
+            )
         try:
-            assert points[..., 0].min() >= 0
-            assert points[..., 1].min() >= 0
-            assert points[..., 0].max() < width
-            assert points[..., 1].max() < height
+            assert polygons[..., 0].min() >= -1
+            assert polygons[..., 1].min() >= -1
+            assert polygons[..., 0].max() < width
+            assert polygons[..., 1].max() < height
         except AssertionError as e:
             print("ERROR: Some polygon coordinates are out of image bounds. This is a bug. Please report this.")
-            print("(Xmin, Ymin, Xmax, Ymax) = ({}, {}, {}, {})".format(points[..., 0].min(), points[..., 1].min(),
-                                                                       points[..., 0].max(), points[..., 1].max()))
-            print("Image dims: {}".format(image.shape))
+            print("(Xmin, Ymin, Xmax, Ymax) = ({}, {}, {}, {})".format(polygons[..., 0].min(), polygons[..., 1].min(),
+                                                                       polygons[..., 0].max(), polygons[..., 1].max()))
+            print("Max dims: {}".format(max_dims))
             raise e
 
     @staticmethod
-    def constrain_points(image: np.ndarray, points: np.ndarray):
-        height, width = image.shape[:2]
-        points[..., 0][points[..., 0] < 0] = 0
-        points[..., 0][points[..., 0] >= width] = width - 1
-        points[..., 1][points[..., 1] < 0] = 0
-        points[..., 1][points[..., 1] >= height] = height - 1
+    def constrain_points(max_dims: tuple, points: np.ndarray):
+        height, width = max_dims
+        if isinstance(points, np.ndarray):
+            points[..., 0][points[..., 0] < 0] = 0
+            points[..., 0][points[..., 0] >= width] = width - 1
+            points[..., 1][points[..., 1] < 0] = 0
+            points[..., 1][points[..., 1] >= height] = height - 1
+        elif isinstance(points, list):
+            raise NotImplementedError("Expressing points as a list is currently unsupported.")
         return points
 
     @staticmethod
@@ -241,24 +248,34 @@ class LowPolyfier:
 
         return new_regions, np.array(new_vertices, dtype=np.int32)
 
+    def get_delaunay_triangles(self, image: np.ndarray):
+        points = self.get_keypoints(image)
+        delaunay = spatial.Delaunay(points)
+        return np.array([[points[i] for i in simplex] for simplex in delaunay.simplices])
+
+    def get_voronoi_polygons(self, image: np.ndarray):
+        points = self.get_keypoints(image, include_corners=False)
+        voronoi = spatial.Voronoi(points)
+        vertices = np.int32(voronoi.vertices)
+        regions = voronoi.regions
+        print(regions)
+        self.constrain_points(image.shape[:2], vertices)
+        max_polygon_points = len(max(regions, key=lambda x: len(x)))
+        polygons = np.full((len(regions), max_polygon_points, 2), -1)
+        for i, region in enumerate(regions):
+            polygon_points = vertices[region]
+            polygons[i][:polygon_points.shape[0]] = polygon_points
+        return polygons
+
     def get_polygons(self, image: np.ndarray) -> np.ndarray:
         polygon_method = self.options['polygon_method']
         if polygon_method == 'delaunay':
-            points = self.get_keypoints(image)
-            delaunay = spatial.Delaunay(points)
-            polygons = np.array([[points[i] for i in simplex] for simplex in delaunay.simplices])
+            polygons = self.get_delaunay_triangles(image)
         elif polygon_method == 'voronoi':
-            points = self.get_keypoints(image, include_corners=False)
-            polygons = [p[1] for p in pytess.voronoi(points)]
-            print(max([len(p) for p in polygons]))
-            self.visualize_points(image, np.array(polygons[1]))
-            # voronoi = spatial.Voronoi(points)
-            # regions, vertices = self.voronoi_polygons(voronoi)
-            # print(vertices)
-            # print(regions)
+            polygons = self.get_voronoi_polygons(image)
         else:
             raise ValueError(f"Unknown Polygonization method '{polygon_method}'")
-        self.validate_points(image, polygons)
+        self.validate_polygons(image.shape[:2], polygons)
         return polygons
 
     def get_output_dimensions(self, image):
@@ -266,12 +283,20 @@ class LowPolyfier:
         ratio = image.shape[1] / image.shape[0]
         return int(longest_edge / ratio), longest_edge, 3
 
+    @staticmethod
+    def strip_negative_points(polygon):
+        return polygon[polygon.min(axis=1) >= 0]
+
     def shade(self, polygons: np.ndarray, image: np.ndarray) -> np.ndarray:
         canvas_dimensions = self.get_output_dimensions(image)
         scale_factor = max(canvas_dimensions) / max(image.shape)
         scaled_polygons = polygons * scale_factor
         output_image = np.zeros(canvas_dimensions, dtype=np.uint8)
         for polygon, scaled_polygon in zip(polygons, scaled_polygons):
+            polygon = self.strip_negative_points(polygon)
+            scaled_polygon = self.strip_negative_points(scaled_polygon)
+            if len(polygon) < 3:
+                continue
             mask = np.zeros(image.shape[:2], dtype=np.uint8)
             cv2.fillConvexPoly(mask, polygon, (255,))
             mean = cv2.mean(image, mask)[:3]
