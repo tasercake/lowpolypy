@@ -65,7 +65,7 @@ class LowPolyfier:
     def get_random_points(image: np.ndarray, num_points=100) -> np.ndarray:
         if num_points <= 0:
             return np.zeros((0, 2), dtype=np.uint8)
-        return np.array([np.random.uniform((0, 0), image.shape[:2]).astype(np.uint16)[::-1] for _ in range(num_points)])
+        return np.array([np.random.uniform((0, 0), image.shape[:2]).astype(np.int32)[::-1] for _ in range(num_points)])
 
     def get_canny_points(self, image: np.ndarray, low_thresh: int, high_thresh: int, num_points=500) -> np.ndarray:
         if num_points <= 0:
@@ -99,15 +99,12 @@ class LowPolyfier:
     def randomize_points(self, image: np.ndarray, points: np.ndarray, ratio: float) -> None:
         num_random_points = int(len(points) * ratio)
         if num_random_points:
-            replace_indices = np.random.uniform(0, len(points), num_random_points).astype(np.uint16)
+            replace_indices = np.random.uniform(0, len(points), num_random_points).astype(np.int32)
             points[replace_indices] = self.get_random_points(image, num_points=num_random_points)
 
-    def jiggle_keypoints(self, image: np.ndarray, points: np.ndarray, min_ratio: float = 0,
-                         max_ratio: float = 0.01) -> None:
-        ratios = np.random.uniform(min_ratio, max_ratio, points.shape)
-        jiggles = (image.shape[:2] * ratios).astype(np.int16)
-        signs = np.random.random_sample(points.shape) > 0.5
-        jiggles[signs] *= -1
+    def jiggle_keypoints(self, image: np.ndarray, points: np.ndarray, jiggle_ratio: float = 0.01) -> None:
+        ratios = np.random.uniform(-jiggle_ratio, jiggle_ratio, points.shape)
+        jiggles = (image.shape[:2] * ratios).astype(np.int32)
         points += jiggles
         self.constrain_points(image.shape[:2], points)
 
@@ -118,8 +115,7 @@ class LowPolyfier:
         num_random_points = self.options['num_random_points']
         num_canny_points = self.options['num_canny_points']
         num_laplace_points = self.options['num_laplace_points']
-        jiggle_min_ratio = self.options['jiggle_min_ratio']
-        jiggle_max_ratio = self.options['jiggle_max_ratio']
+        jiggle_ratio = self.options['jiggle_ratio']
         # TODO: add points to image edges
         canny_points = self.get_canny_points(image, canny_low_threshold, canny_high_threshold,
                                              num_points=num_canny_points)
@@ -127,7 +123,7 @@ class LowPolyfier:
         random_points = self.get_random_points(image, num_random_points)
         points = np.concatenate((canny_points, laplace_points, random_points))
         self.randomize_points(image, points, random_replace_ratio)
-        self.jiggle_keypoints(image, points, min_ratio=jiggle_min_ratio, max_ratio=jiggle_max_ratio)
+        self.jiggle_keypoints(image, points, jiggle_ratio=jiggle_ratio)
         if include_corners:
             corners = np.array([
                 (0, 0),  # top left
@@ -177,7 +173,7 @@ class LowPolyfier:
         return points
 
     @staticmethod
-    def voronoi_polygons(vor, radius=None):
+    def finitize_voronoi(vor, radius=None):
         """
         Reconstruct infinite voronoi regions in a 2D diagram to finite regions.
 
@@ -256,9 +252,7 @@ class LowPolyfier:
     def get_voronoi_polygons(self, image: np.ndarray):
         points = self.get_keypoints(image, include_corners=False)
         voronoi = spatial.Voronoi(points)
-        vertices = np.int32(voronoi.vertices)
-        regions = voronoi.regions
-        print(regions)
+        regions, vertices = self.finitize_voronoi(voronoi)
         self.constrain_points(image.shape[:2], vertices)
         max_polygon_points = len(max(regions, key=lambda x: len(x)))
         polygons = np.full((len(regions), max_polygon_points, 2), -1)
