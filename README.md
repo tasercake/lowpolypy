@@ -2,7 +2,7 @@
 
 Generate Low-Poly Versions of Images:
 
-![](G:\Documents\python\lowpolypy\samples.png)
+![](samples.png)
 
 ## Getting Started
 
