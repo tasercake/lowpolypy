@@ -2,3 +2,6 @@ scipy
 numpy
 Pillow
 opencv-python
+shapely
+matplotlib
+
