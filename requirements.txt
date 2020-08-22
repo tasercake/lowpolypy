@@ -5,4 +5,4 @@ opencv-python
 fire
 shapely
 matplotlib
-
+scikit-image
