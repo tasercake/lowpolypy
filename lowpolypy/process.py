@@ -281,6 +281,19 @@ class LowPolyfier:
     def strip_negative_points(polygon):
         return polygon[polygon.min(axis=1) >= 0]
 
+    @staticmethod
+    def get_dominant_color(pixels, clusters, attempts):
+        """
+        Given a (N, Channels) array of pixel values, compute the dominant color via K-means
+        """
+        clusters = min(clusters, len(pixels))
+        flags = cv2.KMEANS_RANDOM_CENTERS
+        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 1, 10)
+        _, labels, centroids = cv2.kmeans(pixels.astype(np.float32), clusters, None, criteria, attempts, flags)
+        _, counts = np.unique(labels, return_counts=True)
+        dominant = centroids[np.argmax(counts)]
+        return dominant
+
     def shade(self, polygons: np.ndarray, image: np.ndarray) -> np.ndarray:
         canvas_dimensions = self.get_output_dimensions(image)
         scale_factor = max(canvas_dimensions) / max(image.shape)
@@ -293,8 +306,9 @@ class LowPolyfier:
                 continue
             mask = np.zeros(image.shape[:2], dtype=np.uint8)
             cv2.fillConvexPoly(mask, polygon, (255,))
-            mean = cv2.mean(image, mask)[:3]
-            cv2.fillConvexPoly(output_image, scaled_polygon.astype(np.int32), mean, lineType=cv2.LINE_AA)
+            color = self.get_dominant_color(image[mask > 0], 3, 3).tolist()
+            # color = cv2.mean(image, mask)[:3]
+            cv2.fillConvexPoly(output_image, scaled_polygon.astype(np.int32), color, lineType=cv2.LINE_AA)
         return output_image
 
     @staticmethod

@@ -2,6 +2,7 @@ scipy
 numpy
 Pillow
 opencv-python
+fire
 shapely
 matplotlib
 
