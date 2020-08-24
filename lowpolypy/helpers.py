@@ -1,43 +1,7 @@
 import os
 from uuid import uuid4
-import numpy as np
 import datetime
 from itertools import product
-
-
-class Range:
-    def __init__(self, default, low=None, high=None, step=None):
-        assert (high is not None) == (low is not None)
-        if high is not None:
-            assert low <= default <= high
-            assert low <= high
-        self.default = default
-        self.low = low
-        self.high = high
-        self.step = step
-
-    def __iter__(self):
-        if self.high:
-            num = self.high - self.low
-            if self.step is not None:
-                num /= self.step
-            return np.linspace(self.low, self.high, num, endpoint=True)
-        return [self.default]
-
-
-class Choice:
-    def __init__(self, *args):
-        assert args
-        self.default = args[0]
-        for choice in args:
-            assert isinstance(choice, type(self.default))
-        self.choices = args
-
-    def __iter__(self):
-        return self.choices
-
-    def __getitem__(self, item):
-        return self.choices[item]
 
 
 def get_default_options(options: dict):
