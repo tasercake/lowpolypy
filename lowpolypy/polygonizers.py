@@ -3,6 +3,8 @@ from abc import ABCMeta, abstractmethod
 from shapely.ops import triangulate
 from shapely.geometry import MultiPoint
 
+from .utils import registry
+
 
 class Polygonizer(metaclass=ABCMeta):
     """
@@ -24,6 +26,7 @@ class Polygonizer(metaclass=ABCMeta):
         return polygons
 
 
+@registry.register("Polygonizer", "DelaunayTriangulator")
 class DelaunayTriangulator(Polygonizer):
     def __init__(self):
         super().__init__()

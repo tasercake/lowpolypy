@@ -4,6 +4,8 @@ import skimage.draw
 from PIL import Image
 from abc import ABCMeta, abstractmethod
 
+from .utils import registry
+
 
 class Shader(metaclass=ABCMeta):
     """
@@ -18,6 +20,7 @@ class Shader(metaclass=ABCMeta):
         return self.forward(image, points, polygons, *args, **kwargs)
 
 
+@registry.register("Shader", "MeanShader")
 class MeanShader(Shader):
     def __init__(self):
         super().__init__()
@@ -35,6 +38,7 @@ class MeanShader(Shader):
         return Image.fromarray(shaded)
 
 
+@registry.register("Shader", "KmeansShader")
 class KmeansShader(Shader):
     def __init__(self, num_clusters=3, num_attempts=3):
         super().__init__()

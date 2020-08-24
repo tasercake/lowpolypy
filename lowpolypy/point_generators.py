@@ -7,6 +7,8 @@ from abc import ABCMeta, abstractmethod
 import shapely
 from shapely.geometry import box, Point, MultiPoint, asMultiPoint
 
+from .utils import registry
+
 
 class PointGenerator(metaclass=ABCMeta):
     """
@@ -71,6 +73,7 @@ class PointGenerator(metaclass=ABCMeta):
         return points
 
 
+@registry.register("PointGenerator", "RandomPoints")
 class RandomPoints(PointGenerator):
     def __init__(self, num_points=100):
         super().__init__()
@@ -82,6 +85,7 @@ class RandomPoints(PointGenerator):
         return points
 
 
+@registry.register("PointGenerator", "ConvPoints")
 class ConvPoints(PointGenerator):
     def __init__(self, num_points=1000, num_filler_points=50, weight_filler_points=True):
         super().__init__()
