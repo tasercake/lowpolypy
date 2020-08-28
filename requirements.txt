@@ -6,3 +6,4 @@ fire
 shapely
 matplotlib
 scikit-image
+hydra-core==1.0.0rc4

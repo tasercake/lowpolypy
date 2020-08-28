@@ -1,8 +1,12 @@
 import os
 import json
+from pathlib import Path
 from PIL import Image
 from typing import Dict
+from loguru import logger
 from collections import ChainMap
+from itertools import chain
+from hydra import utils as hydra_utils
 
 import joblib
 import contextlib
@@ -12,25 +16,46 @@ from joblib.parallel import BatchCompletionCallBack
 
 from .process import LowPolyfier
 from .helpers import get_output_name, OPTIONS, iter_options, get_experiment_dir_name
+from .utils import registry
 
 
-def run(options: dict) -> Dict[str, dict]:
+def run(config) -> Dict[str, dict]:
     """
-    Lowpolyfy one or more images using default or user-provided options.
+    Lowpolyfy one or more images using default or user-provided config.
 
-    Returns (Dict[str, dict]): A mapping from file paths to the options used to generate them.
+    Returns (Dict[str, dict]): A mapping from file paths to the config used to generate them.
     """
-    image_paths = options['image_paths']
-    output_dir = options.get('output_dir', None)
-    output_files = {}
-    lowpolyfier = LowPolyfier(**options)
-    for image_path in image_paths:
-        output_path = get_output_name(image_path, output_dir=output_dir)
-        output_files[output_path] = options
-        image = Image.open(image_path)
-        low_poly_image = lowpolyfier.lowpolyfy(image)
-        low_poly_image.save(output_path, quality=100)
-    return output_files
+    source = Path(hydra_utils.to_absolute_path(config.files.source))
+    if not source.is_file():
+        raise ValueError(f"source must be an image file. Got '{source}'")
+    image = Image.open(source)
+
+    destination = Path(config.files.destination or source.parent / "lowpoly")
+    if destination.is_dir():
+        destination.mkdir(exist_ok=True, parents=True)
+        destination = destination / source.name
+    else:
+        destination.parent.mkdir(exist_ok=True, parents=True)
+
+    pipeline = [
+        registry.get(stage.type, stage.name)(**stage.options)
+        for stage in config.pipeline
+    ]
+    data = dict(image=image, points=None, polygons=None)
+    for stage in pipeline:
+        print(data["image"])
+        data = stage(**data)
+    shaded = data["image"]
+    shaded.save(destination)
+
+    # lowpolyfier = LowPolyfier(**config)
+    # for image_path in image_paths:
+    #     output_path = get_output_name(image_path, output_dir=destination)
+    #     output_files[output_path] = config
+    #     image = Image.open(image_path)
+    #     low_poly_image = lowpolyfier.lowpolyfy(image)
+    #     low_poly_image.save(output_path, quality=100)
+    # return output_files
 
 
 @contextlib.contextmanager
@@ -58,8 +83,8 @@ def experiment(options: dict) -> Dict[str, dict]:
 
     Returns (Dict[str, dict]): A mapping from file paths to the options used to generate them.
     """
-    image_path = options['image_path']
-    output_dir = options.get('output_dir', None) or get_experiment_dir_name(image_path)
+    image_path = options["image_path"]
+    output_dir = options.get("output_dir", None) or get_experiment_dir_name(image_path)
     os.makedirs(output_dir, exist_ok=True)
 
     def run_once(opts):
@@ -71,7 +96,7 @@ def experiment(options: dict) -> Dict[str, dict]:
     options_list = list(iter_options(OPTIONS))
     with tqdm_joblib(tqdm(total=len(options_list))) as pbar:
         results = Parallel(n_jobs=6)(delayed(run_once)(opts) for opts in options_list)
-    with open(os.path.join(output_dir, 'map.json'), 'w') as f:
+    with open(os.path.join(output_dir, "map.json"), "w") as f:
         configs = dict(ChainMap(*results))
         json.dump(configs, f, indent=2)
     return configs

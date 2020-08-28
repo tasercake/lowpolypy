@@ -31,5 +31,5 @@ setuptools.setup(
         "License :: Other/Proprietary License",
         "Operating System :: OS Independent",
     ],
-    # entry_points={"console_scripts": ["lowpolypy=lowpolypy.cli:main"]},
+    entry_points={"console_scripts": ["lowpolypy=lowpolypy.__main__:main"]},
 )
