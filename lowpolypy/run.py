@@ -43,7 +43,6 @@ def run(config) -> Dict[str, dict]:
     ]
     data = dict(image=image, points=None, polygons=None)
     for stage in pipeline:
-        print(data["image"])
         data = stage(**data)
     shaded = data["image"]
     shaded.save(destination)
