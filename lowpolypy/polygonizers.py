@@ -11,14 +11,18 @@ class Polygonizer(metaclass=ABCMeta):
     Takes in a PIL Image and (optionally) a list of shapely points and returns a list of shapely polygons.
     Output should be independent of the order of points.
     """
+
     @abstractmethod
-    def forward(self, image, points, *args, **kwargs):
+    def forward(self, image=None, points=None, polygons=None, *args, **kwargs):
         pass
 
-    def __call__(self, image, points, *args, **kwargs):
-        polygons = self.forward(image, points, *args, **kwargs)
+    def __call__(self, image=None, points=None, polygons=None, *args, **kwargs):
+        polygons = self.forward(image, points, *args, **kwargs)["polygons"]
         polygons = self.simplify(polygons)
-        return polygons
+        output = {"polygons": polygons}
+        output.setdefault("image", image)
+        output.setdefault("points", points)
+        return output
 
     @staticmethod
     def simplify(polygons):
@@ -31,8 +35,8 @@ class DelaunayTriangulator(Polygonizer):
     def __init__(self):
         super().__init__()
 
-    def forward(self, image, points):
+    def forward(self, image=None, points=None, polygons=None):
         if not isinstance(points, MultiPoint):
             points = MultiPoint(points)
         triangles = triangulate(points)
-        return triangles
+        return {"polygons": triangles}

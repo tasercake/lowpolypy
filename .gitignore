@@ -64,3 +64,4 @@ target/
 images/*lowpoly_*.*
 
 .ipynb_checkpoints/
+/outputs

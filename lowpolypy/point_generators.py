@@ -15,22 +15,27 @@ class PointGenerator(metaclass=ABCMeta):
     Takes in a PIL image and returns a list of normalized shapely points
     """
     @abstractmethod
-    def forward(self, image, *args, **kwargs):
+    def forward(self, image=None, points=None, polygons=None, *args, **kwargs):
         pass
 
-    def __call__(self, image, *args, **kwargs):
-        points = self.forward(image, *args, **kwargs)
+    def __call__(self, image=None, points=None, polygons=None, *args, **kwargs):
+        points = self.forward(image, *args, **kwargs)["points"]
         points = self.rescale_points(points, image.size)
         points = self.remove_duplicates(points, 4)
         points = self.with_boundary_points(points, image.size)
-        return points
+        output = {"points": points}
+        output.setdefault("image", image)
+        output.setdefault("polygons", polygons)
+        return output
 
     @staticmethod
     def rescale_points(points, image_size):
         """
         Rescales [0, 1] normalized points to the specified Width x Height.
         """
-        coordinates = (np.array([p.xy for p in points]).squeeze(-1) * image_size).round()
+        coordinates = (
+            np.array([p.xy for p in points]).squeeze(-1) * image_size
+        ).round()
         return list(asMultiPoint(coordinates))
 
     @staticmethod
@@ -79,38 +84,44 @@ class RandomPoints(PointGenerator):
         super().__init__()
         self.num_points = num_points
 
-    def forward(self, image):
+    def forward(self, image=None, points=None, polygons=None):
         coordinates = np.random.rand(self.num_points, 2)
         points = [Point(c) for c in coordinates]
-        return points
+        return {"points": points}
 
 
 @registry.register("PointGenerator", "ConvPoints")
 class ConvPoints(PointGenerator):
-    def __init__(self, num_points=1000, num_filler_points=50, weight_filler_points=True):
+    def __init__(
+        self, num_points=1000, num_filler_points=50, weight_filler_points=True
+    ):
         super().__init__()
         self.num_points = num_points
         self.num_filler_points = num_filler_points
         self.weight_filler_points = weight_filler_points
 
-    def forward(self, image):
+    def forward(self, image=None, points=None, polygons=None):
         points = []
 
         image = np.array(image)
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        kernel = np.array([
-            [-3 - 3j, 0 - 10j, +3 - 3j],
-            [-10 + 0j, 0 + 0j, +10 + 0j],
-            [-3 + 3j, 0 + 10j, +3 + 3j],
-        ])
-        grad = signal.convolve2d(gray, kernel, boundary='symm', mode='same')
+        kernel = np.array(
+            [
+                [-3 - 3j, 0 - 10j, +3 - 3j],
+                [-10 + 0j, 0 + 0j, +10 + 0j],
+                [-3 + 3j, 0 + 10j, +3 + 3j],
+            ]
+        )
+        grad = signal.convolve2d(gray, kernel, boundary="symm", mode="same")
         mag = np.absolute(grad)
         mag = mag / mag.max()
         mag[mag <= 0.1] = 0
         mag = cv2.equalizeHist((mag * 255).astype(np.uint8))
         weights = np.ravel(mag.astype(np.float32) / mag.sum())
         coordinates = np.arange(0, weights.size, dtype=np.uint32)
-        choices = np.random.choice(coordinates, size=self.num_points, replace=False, p=weights)
+        choices = np.random.choice(
+            coordinates, size=self.num_points, replace=False, p=weights
+        )
         raw_points = np.unravel_index(choices, image.shape[:2])
         conv_points = np.stack(raw_points, axis=-1) / image.shape[:2]
         points += list(MultiPoint(conv_points[..., ::-1]))
@@ -120,9 +131,14 @@ class ConvPoints(PointGenerator):
             inverse = cv2.blur(inverse, ksize=(13, 13))
             weights = np.ravel(inverse.astype(np.float32) / inverse.sum())
             coordinates = np.arange(0, weights.size, dtype=np.uint32)
-            choices = np.random.choice(coordinates, size=self.num_filler_points, replace=False, p=weights if self.weight_filler_points else None)
+            choices = np.random.choice(
+                coordinates,
+                size=self.num_filler_points,
+                replace=False,
+                p=weights if self.weight_filler_points else None,
+            )
             raw_points = np.unravel_index(choices, image.shape[:2])
             filler_points = np.stack(raw_points, axis=-1) / image.shape[:2]
             points += list(MultiPoint(filler_points[..., ::-1]))
 
-        return points
+        return {"points": points}
