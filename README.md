@@ -5,6 +5,12 @@ Generate Low-Poly Versions of Images:
 
 ![Samples](samples.png)
 
+## Work In Progress
+
+This repo is being overhauled and new features are being added.
+
+The Colab notebook and setup instructions may not work at the moment.
+
 ## Run it on Colab
 [Run this notebook in Google Colab](https://colab.research.google.com/gist/maschere/6c789d70bbdaed2d89e1742f9d50a508/lowpolypy.ipynb) to get started quickly.
 
