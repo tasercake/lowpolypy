@@ -4,15 +4,7 @@ files:
   recursive: false
   image_extensions: [.jpg, .jpeg, .png, .bmp]
 pipeline:
-  - type: PointGenerator
-    name: ConvPoints
-    options:
-      num_points: 1000
-      num_filler_points: 50
-      weight_filler_points: true
-  - type: Polygonizer
-    name: DelaunayTriangulator
-    options: {}
-  - type: Shader
-    name: KmeansShader
-    options: {}
+  CNNPoints:
+    num_points: 1000
+  DelaunayTriangulator: {}
+  KmeansShader: {}

@@ -37,14 +37,15 @@ def run(config) -> Dict[str, dict]:
         destination.parent.mkdir(exist_ok=True, parents=True)
 
     pipeline = [
-        registry.get(stage.type, stage.name)(**stage.options)
-        for stage in config.pipeline
+        registry.get("LowPolyStage", stage_name)(**stage_options)
+        for stage_name, stage_options in config.pipeline.items()
     ]
     data = dict(image=image, points=None, polygons=None)
     for stage in pipeline:
         data = stage(**data)
     shaded = data["image"]
-    shaded.save(destination)
+    shaded.save(destination, quality=95)
+    return data
 
     # lowpolyfier = LowPolyfier(**config)
     # for image_path in image_paths:
