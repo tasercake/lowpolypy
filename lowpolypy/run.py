@@ -6,7 +6,6 @@ from typing import Dict
 from loguru import logger
 from collections import ChainMap
 from itertools import chain
-from hydra import utils as hydra_utils
 
 import joblib
 import contextlib
@@ -25,7 +24,7 @@ def run(config) -> Dict[str, dict]:
 
     Returns (Dict[str, dict]): A mapping from file paths to the config used to generate them.
     """
-    source = Path(hydra_utils.to_absolute_path(config.files.source))
+    source = Path(config.files.source)
     if not source.is_file():
         raise ValueError(f"source must be an image file. Got '{source}'")
     image = Image.open(source)

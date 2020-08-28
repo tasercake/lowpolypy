@@ -1,10 +1,11 @@
-import argparse
-from .helpers import OPTIONS, get_default_options
-from .run import experiment, run
+from pathlib import Path
 from loguru import logger
-import hydra
-from omegaconf import DictConfig
+from omegaconf import OmegaConf
 
+from .run import run
+
+# import argparse
+# from .helpers import OPTIONS, get_default_options
 # parser = argparse.ArgumentParser()
 # subparsers = parser.add_subparsers(dest='mode')
 #
@@ -25,9 +26,11 @@ from omegaconf import DictConfig
 # arguments = parser.parse_args()
 
 
-@hydra.main(config_name="config")
 @logger.catch()
-def main(config):
+def main():
+    yaml_config = OmegaConf.load(Path(__file__).parent / "config.yaml")
+    cli_config = OmegaConf.from_cli()
+    config = OmegaConf.merge(yaml_config, cli_config)
     logger.info(config)
     run(config)
 
