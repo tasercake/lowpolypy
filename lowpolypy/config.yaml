@@ -4,7 +4,11 @@ files:
   recursive: false
   image_extensions: [.jpg, .jpeg, .png, .bmp]
 pipeline:
-  CNNPoints:
-    num_points: 1000
+  ConvPoints:
+    num_points: 5000
+    num_filler_points: 5000
+    weight_filler_points: true
+  # CNNPoints:
+  #   num_points: 10000
   DelaunayTriangulator: {}
   KmeansShader: {}

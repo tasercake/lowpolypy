@@ -15,6 +15,7 @@ from joblib.parallel import BatchCompletionCallBack
 
 from .process import LowPolyfier
 from .helpers import get_output_name, OPTIONS, iter_options, get_experiment_dir_name
+from .lowpoly_stages import Compose
 from .utils import registry
 
 
@@ -36,13 +37,12 @@ def run(config) -> Dict[str, dict]:
     else:
         destination.parent.mkdir(exist_ok=True, parents=True)
 
-    pipeline = [
+    pipeline = Compose([
         registry.get("LowPolyStage", stage_name)(**stage_options)
         for stage_name, stage_options in config.pipeline.items()
-    ]
-    data = dict(image=image, points=None, polygons=None)
-    for stage in pipeline:
-        data = stage(**data)
+    ])
+    data = pipeline({"image":image, "stages":pipeline.stages})
+
     shaded = data["image"]
     shaded.save(destination, quality=95)
     return data

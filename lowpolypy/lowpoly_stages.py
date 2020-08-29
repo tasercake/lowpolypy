@@ -10,27 +10,33 @@ import shapely
 from shapely.geometry import box, Point, MultiPoint, asMultiPoint
 from shapely.ops import triangulate
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import pytorch_lightning as pl
+
 from .utils import registry
 
 
-# TODO: Remove stage base classes
-class PointGenerator(metaclass=ABCMeta):
+# TODO: Unify stage base classes
+class PointGenerator(nn.Module):
     """
     Takes in a PIL image and returns a list of normalized shapely points
     """
     @abstractmethod
-    def forward(self, image=None, points=None, polygons=None, *args, **kwargs):
+    def forward(self, data, *args, **kwargs):
         pass
 
-    def __call__(self, image=None, points=None, polygons=None, *args, **kwargs):
-        points = self.forward(image, *args, **kwargs)["points"]
+    def __call__(self, data, *args, **kwargs):
+        data = dict(data)
+        image = data["image"]
+        data.update(super().__call__(data, *args, **kwargs))
+        points = data["points"]
         points = self.rescale_points(points, image.size)
         points = self.remove_duplicates(points, 4)
         points = self.with_boundary_points(points, image.size)
-        output = {"points": points}
-        output.setdefault("image", image)
-        output.setdefault("polygons", polygons)
-        return output
+        data["points"] = points
+        return data
 
     @staticmethod
     def rescale_points(points, image_size):
@@ -82,23 +88,22 @@ class PointGenerator(metaclass=ABCMeta):
         return points
 
 
-class Polygonizer(metaclass=ABCMeta):
+class Polygonizer(nn.Module):
     """
     Takes in a PIL Image and (optionally) a list of shapely points and returns a list of shapely polygons.
     Output should be independent of the order of points.
     """
-
     @abstractmethod
-    def forward(self, image=None, points=None, polygons=None, *args, **kwargs):
+    def forward(self, data, *args, **kwargs):
         pass
 
-    def __call__(self, image=None, points=None, polygons=None, *args, **kwargs):
-        polygons = self.forward(image, points, *args, **kwargs)["polygons"]
+    def __call__(self, data, *args, **kwargs):
+        data = dict(data)
+        data.update(super().__call__(data, *args, **kwargs))
+        polygons = data["polygons"]
         polygons = self.simplify(polygons)
-        output = {"polygons": polygons}
-        output.setdefault("image", image)
-        output.setdefault("points", points)
-        return output
+        data["polygons"] = polygons
+        return data
 
     @staticmethod
     def simplify(polygons):
@@ -106,30 +111,39 @@ class Polygonizer(metaclass=ABCMeta):
         return polygons
 
 
-class Shader(metaclass=ABCMeta):
+class Shader(nn.Module):
     """
     Takes in a PIL image and (optionally) a list of points and (optionally) a list of polygons and returns a shaded image.
     Output should be independent of the order of points or polygons.
     """
-
     @abstractmethod
-    def forward(self, image=None, points=None, polygons=None, *args, **kwargs):
+    def forward(self, data, *args, **kwargs):
         pass
 
-    def __call__(self, image=None, points=None, polygons=None, *args, **kwargs):
-        output = self.forward(image, points, polygons, *args, **kwargs)
-        output.setdefault("points", points)
-        output.setdefault("polygons", polygons)
-        return output
+    def __call__(self, data, *args, **kwargs):
+        data = dict(data)
+        data.update(super().__call__(data, *args, **kwargs))
+        return data
+
+
+class Compose(nn.Module):
+    def __init__(self, stages):
+        super().__init__()
+        self.stages = stages
+
+    def forward(self, data):
+        for stage in self.stages:
+            data = stage(data)
+        return data
 
 
 @registry.register("LowPolyStage", "CNNPoints")
-class CNNPoints(PointGenerator):
+class CNNPoints(PointGenerator, pl.LightningModule):
     def __init__(self, num_points=100):
         super().__init__()
         self.num_points = num_points
 
-    def forward(self, image=None, points=None, polygons=None):
+    def forward(self, data):
         coordinates = np.random.rand(self.num_points, 2)
         points = [Point(c) for c in coordinates]
         return {"points": points}
@@ -141,7 +155,7 @@ class RandomPoints(PointGenerator):
         super().__init__()
         self.num_points = num_points
 
-    def forward(self, image=None, points=None, polygons=None):
+    def forward(self, data):
         coordinates = np.random.rand(self.num_points, 2)
         points = [Point(c) for c in coordinates]
         return {"points": points}
@@ -157,10 +171,9 @@ class ConvPoints(PointGenerator):
         self.num_filler_points = num_filler_points
         self.weight_filler_points = weight_filler_points
 
-    def forward(self, image=None, points=None, polygons=None):
+    def forward(self, data):
         points = []
-
-        image = np.array(image)
+        image = np.array(data["image"])
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         kernel = np.array(
             [
@@ -206,7 +219,8 @@ class DelaunayTriangulator(Polygonizer):
     def __init__(self):
         super().__init__()
 
-    def forward(self, image=None, points=None, polygons=None):
+    def forward(self, data):
+        points = data["points"]
         if not isinstance(points, MultiPoint):
             points = MultiPoint(points)
         triangles = triangulate(points)
@@ -218,7 +232,8 @@ class MeanShader(Shader):
     def __init__(self):
         super().__init__()
 
-    def forward(self, image=None, points=None, polygons=None):
+    def forward(self, data):
+        image, polygons = data["image"], data["polygons"]
         image = np.array(image)
         shaded = np.array(image)
         mask = np.zeros((*image.shape[:2], 1), dtype=np.uint8)
@@ -261,7 +276,8 @@ class KmeansShader(Shader):
         dominant = centroids[np.argmax(counts)]
         return dominant
 
-    def forward(self, image=None, points=None, polygons=None):
+    def forward(self, data):
+        image, polygons = data["image"], data["polygons"]
         image = np.array(image)
         shaded = np.zeros_like(image)
         for polygon in polygons:
