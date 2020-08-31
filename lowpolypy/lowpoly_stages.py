@@ -30,11 +30,12 @@ class PointGenerator(nn.Module):
     def __call__(self, data, *args, **kwargs):
         data = dict(data)
         image = data["image"]
+        image_dims = image.shape[::-1]
         data.update(super().__call__(data, *args, **kwargs))
         points = data["points"]
-        points = self.rescale_points(points, image.size)
+        points = self.rescale_points(points, image_dims)
         points = self.remove_duplicates(points, 4)
-        points = self.with_boundary_points(points, image.size)
+        points = self.with_boundary_points(points, image_dims)
         data["points"] = points
         return data
 
@@ -234,7 +235,6 @@ class MeanShader(Shader):
 
     def forward(self, data):
         image, polygons = data["image"], data["polygons"]
-        image = np.array(image)
         shaded = np.array(image)
         mask = np.zeros((*image.shape[:2], 1), dtype=np.uint8)
         for polygon in polygons:
@@ -249,7 +249,7 @@ class MeanShader(Shader):
                 lineType=cv2.LINE_AA,
                 shift=8,
             )
-        return {"image": Image.fromarray(shaded)}
+        return {"image": shaded}
 
 
 @registry.register("LowPolyStage", "KmeansShader")
@@ -278,7 +278,6 @@ class KmeansShader(Shader):
 
     def forward(self, data):
         image, polygons = data["image"], data["polygons"]
-        image = np.array(image)
         shaded = np.zeros_like(image)
         for polygon in polygons:
             coords = np.array(polygon.exterior.coords)
@@ -296,4 +295,4 @@ class KmeansShader(Shader):
                 lineType=cv2.LINE_AA,
                 shift=8,
             )
-        return {"image": Image.fromarray(shaded)}
+        return {"image": shaded}

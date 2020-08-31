@@ -1,4 +1,5 @@
 import os
+import cv2
 import json
 from pathlib import Path
 from PIL import Image
@@ -28,7 +29,8 @@ def run(config) -> Dict[str, dict]:
     source = Path(config.files.source)
     if not source.is_file():
         raise ValueError(f"source must be an image file. Got '{source}'")
-    image = Image.open(source)
+    image = cv2.imread(source)
+    # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     destination = Path(config.files.destination or source.parent / "lowpoly")
     if destination.is_dir():
@@ -41,7 +43,7 @@ def run(config) -> Dict[str, dict]:
         registry.get("LowPolyStage", stage_name)(**stage_options)
         for stage_name, stage_options in config.pipeline.items()
     ])
-    data = pipeline({"image":image, "stages":pipeline.stages})
+    data = pipeline({"image": image, "stages": pipeline.stages})
 
     shaded = data["image"]
     shaded.save(destination, quality=95)
