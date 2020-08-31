@@ -1,4 +1,6 @@
 from typing import Type
+from pathlib import Path
+from omegaconf import OmegaConf
 
 
 class registry:
@@ -53,3 +55,10 @@ class registry:
     # @classmethod
     # def register_dataset(cls, name: str, dataset_class: Type):
     #     return cls.register("dataset", name)(dataset_class)
+
+
+def load_config(config_path="config.yaml", default=True, cli=True):
+    yaml_config = OmegaConf.load(Path(__file__).parent / config_path)
+    cli_config = OmegaConf.from_cli()
+    config = OmegaConf.merge(yaml_config, cli_config)
+    return config

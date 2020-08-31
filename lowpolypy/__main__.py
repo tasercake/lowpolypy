@@ -3,6 +3,7 @@ from loguru import logger
 from omegaconf import OmegaConf
 
 from .run import run
+from .utils import load_config
 
 # import argparse
 # from .helpers import OPTIONS, get_default_options
@@ -28,9 +29,7 @@ from .run import run
 
 @logger.catch()
 def main():
-    yaml_config = OmegaConf.load(Path(__file__).parent / "config.yaml")
-    cli_config = OmegaConf.from_cli()
-    config = OmegaConf.merge(yaml_config, cli_config)
+    config = load_config()
     logger.info(config)
     run(config)
 
