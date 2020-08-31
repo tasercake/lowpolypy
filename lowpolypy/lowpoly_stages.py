@@ -127,7 +127,7 @@ class Shader(nn.Module):
         return data
 
 
-class Compose(nn.Module):
+class Pipeline(nn.Module):
     def __init__(self, stages):
         super().__init__()
         self.stages = stages

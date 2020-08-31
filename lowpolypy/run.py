@@ -6,17 +6,14 @@ from PIL import Image
 from typing import Dict
 from loguru import logger
 from collections import ChainMap
-from itertools import chain
 
 import joblib
 import contextlib
 from tqdm import tqdm
 from joblib import Parallel, delayed
-from joblib.parallel import BatchCompletionCallBack
 
-from .process import LowPolyfier
-from .helpers import get_output_name, OPTIONS, iter_options, get_experiment_dir_name
-from .lowpoly_stages import Compose
+from .helpers import OPTIONS, iter_options, get_experiment_dir_name
+from .lowpoly_stages import Pipeline
 from .utils import registry
 
 
@@ -39,7 +36,7 @@ def run(config) -> Dict[str, dict]:
     else:
         destination.parent.mkdir(exist_ok=True, parents=True)
 
-    pipeline = Compose([
+    pipeline = Pipeline([
         registry.get("LowPolyStage", stage_name)(**stage_options)
         for stage_name, stage_options in config.pipeline.items()
     ])
