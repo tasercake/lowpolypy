@@ -13,7 +13,7 @@ from tqdm import tqdm
 from joblib import Parallel, delayed
 
 from .helpers import OPTIONS, iter_options, get_experiment_dir_name
-from .lowpoly_stages import Pipeline
+from .layers import Pipeline
 from .utils import registry
 
 
