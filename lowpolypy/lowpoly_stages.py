@@ -13,7 +13,11 @@ from shapely.ops import triangulate
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
+import albumentations as A
+from torchvision import transforms
 import pytorch_lightning as pl
+import segmentation_models_pytorch as smp
 
 from .utils import registry
 
@@ -140,14 +144,20 @@ class Pipeline(nn.Module):
 
 @registry.register("LowPolyStage", "CNNPoints")
 class CNNPoints(PointGenerator, pl.LightningModule):
-    def __init__(self, num_points=100):
+    def __init__(
+        self,
+        num_points=100,
+    ):
         super().__init__()
         self.num_points = num_points
+        self.model = smp.DeepLabV3("efficientnet-b0", in_channels=3)
 
     def forward(self, data):
-        coordinates = np.random.rand(self.num_points, 2)
+        image = data["image"]
+        point_matrix = self.model(image).cpu().detach().numpy()
+        coordinates = np.argwhere(point_matrix >= 0.5)
         points = [Point(c) for c in coordinates]
-        return {"points": points}
+        return {"points": points, "point_matrix": point_matrix}
 
 
 @registry.register("LowPolyStage", "RandomPoints")

@@ -7,3 +7,6 @@ shapely
 matplotlib
 scikit-image
 omegaconf
+segmentation_models_pytorch
+pytorch-lightning
+albumentations
