@@ -3,7 +3,7 @@
 
 Generate Low-Poly Versions of Images:
 
-![Samples](samples.png)
+![Samples](samples.jpg)
 
 ## Work In Progress
 

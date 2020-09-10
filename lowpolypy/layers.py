@@ -173,7 +173,8 @@ class ConvPoints(Layer):
         mag = np.absolute(grad)
         mag = mag / mag.max()
         mag[mag <= 0.1] = 0
-        mag = cv2.equalizeHist((mag * 255).astype(np.uint8))
+        mag = (mag * 255).astype(np.uint8)
+        mag = cv2.equalizeHist(mag)
         weights = np.ravel(mag.astype(np.float32) / mag.sum())
         coordinates = np.arange(0, weights.size, dtype=np.uint32)
         choices = np.random.choice(
