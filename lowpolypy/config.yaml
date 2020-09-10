@@ -1,0 +1,19 @@
+run:
+  mode: single
+  iterations: 60
+files:
+  source:
+  destination:
+  recursive: false
+  image_extensions: [.jpg, .jpeg, .png, .bmp]
+pipeline:
+  ConvPoints:
+    num_points: 5000
+    num_filler_points: 5000
+    weight_filler_points: true
+  # CNNPoints:
+  #   num_points: 10000
+  ResizeImage:
+    size: 2560
+  DelaunayTriangulator: {}
+  KmeansShader: {}
