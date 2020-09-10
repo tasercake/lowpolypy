@@ -58,7 +58,7 @@ class registry:
 
 
 def load_config(config_path="config.yaml", default=True, cli=True):
-    yaml_config = OmegaConf.load(Path(__file__).parent / config_path)
+    yaml_config = OmegaConf.load(Path(__file__).parents[1] / config_path)
     cli_config = OmegaConf.from_cli()
     config = OmegaConf.merge(yaml_config, cli_config)
     return config
