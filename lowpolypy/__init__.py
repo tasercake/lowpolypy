@@ -1,1 +1,8 @@
-from .layers import PointGenerator, RandomPoints, ConvPoints, CNNPoints, Polygonizer, DelaunayTriangulator, Shader, MeanShader, KmeansShader
+from .layers import (
+    RandomPoints,
+    ConvPoints,
+    CNNPoints,
+    DelaunayTriangulator,
+    MeanShader,
+    KmeansShader,
+)

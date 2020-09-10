@@ -1,10 +1,10 @@
 import cv2
 import numpy as np
 import skimage.draw
-from PIL import Image
 from abc import ABCMeta, abstractmethod
 from scipy.spatial import cKDTree
 from scipy import signal
+from loguru import logger
 
 import shapely
 from shapely.geometry import box, Point, MultiPoint, asMultiPoint
@@ -22,25 +22,14 @@ import segmentation_models_pytorch as smp
 from .utils import registry
 
 
-# TODO: Unify stage base classes
-class PointGenerator(nn.Module):
-    """
-    Takes in a PIL image and returns a list of normalized shapely points
-    """
+class Layer(nn.Module):
     @abstractmethod
     def forward(self, data, *args, **kwargs):
         pass
 
     def __call__(self, data, *args, **kwargs):
         data = dict(data)
-        image = data["image"]
-        image_dims = image.shape[::-1]
         data.update(super().__call__(data, *args, **kwargs))
-        points = data["points"]
-        points = self.rescale_points(points, image_dims)
-        points = self.remove_duplicates(points, 4)
-        points = self.with_boundary_points(points, image_dims)
-        data["points"] = points
         return data
 
     @staticmethod
@@ -54,8 +43,8 @@ class PointGenerator(nn.Module):
         return list(asMultiPoint(coordinates))
 
     @staticmethod
-    def with_boundary_points(points, image_size):
-        edge_box = box(0, 0, *image_size)
+    def with_boundary_points(points):
+        edge_box = box(0, 0, 1, 1)
         edges = edge_box.exterior
 
         edge_points = []
@@ -68,7 +57,7 @@ class PointGenerator(nn.Module):
         return points + edge_points + corners
 
     @staticmethod
-    def remove_duplicates(points, tolerance):
+    def remove_duplicate_points(points, tolerance):
         coordinates = np.array([p.xy for p in points]).squeeze(-1)
 
         tree = cKDTree(coordinates, compact_nodes=len(points) > 1000)
@@ -92,49 +81,16 @@ class PointGenerator(nn.Module):
         points = [p for i, p in enumerate(points) if i not in discard]
         return points
 
-
-class Polygonizer(nn.Module):
-    """
-    Takes in a PIL Image and (optionally) a list of shapely points and returns a list of shapely polygons.
-    Output should be independent of the order of points.
-    """
-    @abstractmethod
-    def forward(self, data, *args, **kwargs):
-        pass
-
-    def __call__(self, data, *args, **kwargs):
-        data = dict(data)
-        data.update(super().__call__(data, *args, **kwargs))
-        polygons = data["polygons"]
-        polygons = self.simplify(polygons)
-        data["polygons"] = polygons
-        return data
-
     @staticmethod
     def simplify(polygons):
         # TODO: Merge small polygons
         return polygons
 
 
-class Shader(nn.Module):
-    """
-    Takes in a PIL image and (optionally) a list of points and (optionally) a list of polygons and returns a shaded image.
-    Output should be independent of the order of points or polygons.
-    """
-    @abstractmethod
-    def forward(self, data, *args, **kwargs):
-        pass
-
-    def __call__(self, data, *args, **kwargs):
-        data = dict(data)
-        data.update(super().__call__(data, *args, **kwargs))
-        return data
-
-
 class Pipeline(nn.Module):
     def __init__(self, stages):
         super().__init__()
-        self.stages = stages
+        self.stages = nn.ModuleList(stages)
 
     def forward(self, data):
         for stage in self.stages:
@@ -142,8 +98,24 @@ class Pipeline(nn.Module):
         return data
 
 
+@registry.register("LowPolyStage", "ResizeImage")
+class ResizeImage(Layer):
+    def __init__(self, size):
+        super().__init__()
+        self.size = size
+
+    def forward(self, data):
+        image = data["image"]
+        image_dims = image.shape[1::-1]
+        aspect_ratio = image_dims[0] / image_dims[1]
+        new_size = (int(round(self.size * aspect_ratio)), self.size)
+        logger.debug(f"Resized dimensions: {new_size}")
+        resized = cv2.resize(image, new_size, interpolation=cv2.INTER_LANCZOS4)
+        return {"image": resized}
+
+
 @registry.register("LowPolyStage", "CNNPoints")
-class CNNPoints(PointGenerator, pl.LightningModule):
+class CNNPoints(Layer):
     def __init__(
         self,
         num_points=100,
@@ -157,11 +129,13 @@ class CNNPoints(PointGenerator, pl.LightningModule):
         point_matrix = self.model(image).cpu().detach().numpy()
         coordinates = np.argwhere(point_matrix >= 0.5)
         points = [Point(c) for c in coordinates]
+        points = self.remove_duplicate_points(points, 1e-4)
+        points = self.with_boundary_points(points)
         return {"points": points, "point_matrix": point_matrix}
 
 
 @registry.register("LowPolyStage", "RandomPoints")
-class RandomPoints(PointGenerator):
+class RandomPoints(Layer):
     def __init__(self, num_points=100):
         super().__init__()
         self.num_points = num_points
@@ -169,11 +143,13 @@ class RandomPoints(PointGenerator):
     def forward(self, data):
         coordinates = np.random.rand(self.num_points, 2)
         points = [Point(c) for c in coordinates]
+        points = self.remove_duplicate_points(points, 1e-4)
+        points = self.with_boundary_points(points)
         return {"points": points}
 
 
 @registry.register("LowPolyStage", "ConvPoints")
-class ConvPoints(PointGenerator):
+class ConvPoints(Layer):
     def __init__(
         self, num_points=1000, num_filler_points=50, weight_filler_points=True
     ):
@@ -184,7 +160,7 @@ class ConvPoints(PointGenerator):
 
     def forward(self, data):
         points = []
-        image = np.array(data["image"])
+        image = data["image"]
         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         kernel = np.array(
             [
@@ -222,16 +198,16 @@ class ConvPoints(PointGenerator):
             filler_points = np.stack(raw_points, axis=-1) / image.shape[:2]
             points += list(MultiPoint(filler_points[..., ::-1]))
 
+        points = self.remove_duplicate_points(points, 3e-4)
+        points = self.with_boundary_points(points)
+
         return {"points": points}
 
 
 @registry.register("LowPolyStage", "DelaunayTriangulator")
-class DelaunayTriangulator(Polygonizer):
-    def __init__(self):
-        super().__init__()
-
+class DelaunayTriangulator(Layer):
     def forward(self, data):
-        points = data["points"]
+        points = self.rescale_points(data["points"], data["image"].shape[1::-1])
         if not isinstance(points, MultiPoint):
             points = MultiPoint(points)
         triangles = triangulate(points)
@@ -239,13 +215,13 @@ class DelaunayTriangulator(Polygonizer):
 
 
 @registry.register("LowPolyStage", "MeanShader")
-class MeanShader(Shader):
+class MeanShader(Layer):
     def __init__(self):
         super().__init__()
 
     def forward(self, data):
         image, polygons = data["image"], data["polygons"]
-        shaded = np.array(image)
+        shaded = image
         mask = np.zeros((*image.shape[:2], 1), dtype=np.uint8)
         for polygon in polygons:
             coords = np.array(polygon.exterior.coords)
@@ -263,7 +239,7 @@ class MeanShader(Shader):
 
 
 @registry.register("LowPolyStage", "KmeansShader")
-class KmeansShader(Shader):
+class KmeansShader(Layer):
     def __init__(self, num_clusters=3, num_attempts=3):
         super().__init__()
         self.num_clusters = num_clusters

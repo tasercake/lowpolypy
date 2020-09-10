@@ -1,3 +1,6 @@
+run:
+  mode: single
+  iterations: 60
 files:
   source:
   destination:
@@ -10,5 +13,7 @@ pipeline:
     weight_filler_points: true
   # CNNPoints:
   #   num_points: 10000
+  ResizeImage:
+    size: 2560
   DelaunayTriangulator: {}
   KmeansShader: {}
