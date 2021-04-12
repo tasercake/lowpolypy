@@ -1,12 +1,24 @@
-scipy
-numpy
-Pillow
-opencv-python
-fire
-shapely
-matplotlib
-scikit-image
-omegaconf
-segmentation_models_pytorch
-pytorch-lightning
-albumentations
+######################################
+# requirements.txt is no longer used.
+# Use poetry (pyproject.toml) instead.
+######################################
+
+# # Image manipulation
+# pillow
+# opencv-python
+# scikit-image
+
+# # Math & geometry
+# numpy==1.19.3
+# shapely==1.6.4
+# scipy
+
+# Visualization
+# matplotlib
+
+#fire
+#shapely
+#omegaconf
+#segmentation_models_pytorch
+#pytorch-lightning
+#albumentations
