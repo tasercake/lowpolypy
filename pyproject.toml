@@ -3,8 +3,6 @@ name = "lowpolypy"
 version = "0.1.0"
 description = "A tool to create low-poly versions of images"
 authors = [{ name = "Krishna Penukonda", email = "krishna@penukonda.me" }]
-license = "MIT"
-readme = "README.md"
 requires-python = ">=3.13"
 
 dependencies = [

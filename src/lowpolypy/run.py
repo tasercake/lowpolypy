@@ -1,8 +1,8 @@
 import logging
 import numpy as np
 
-from lowpolypy.image_utils import resize_image
-from lowpolypy.shaders import shade_kmeans
+from .image_utils import resize_image
+from .shaders import shade_kmeans
 
 from .point_generators import (
     conv_points,
