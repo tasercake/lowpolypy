@@ -28,7 +28,7 @@ I'm currently working on wrapping these scripts in a Django project and getting 
 
 Clone this repository and navigate to the project directory:
 
-```bash
+```shell
 git clone https://github.com/tasercake/lowpolypy
 cd lowpolypy
 ```
@@ -37,16 +37,22 @@ cd lowpolypy
 
 Install dependencies:
 
-```bash
+```shell
 uv sync
+```
+
+If you'd like to run the server locally, include the `server` dependency group:
+
+```shell
+uv sync --group server
 ```
 
 ### Try It Out
 
 From the root of the project directory, run
 
-```bash
-python -m lowpolypy './images/giraffe.jpg'
+```shell
+lowpolypy './images/giraffe.jpg'
 ```
 
 This should create a new image in the `images` directory.

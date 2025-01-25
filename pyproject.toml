@@ -8,12 +8,10 @@ readme = "README.md"
 requires-python = ">=3.13"
 
 dependencies = [
-    "Pillow>=8.1.2",
     "opencv-python>=4.5.1",
     "scikit-image>=0.18.1",
     "numpy>=1.20.1",
     "scipy>=1.6.1",
-    "loguru>=0.7.3",
     "typer>=0.15.1",
     "shapely>=2.0.6",
 ]
@@ -29,3 +27,13 @@ dev = [
     "jupyter>=1.0.0",
     "jupyterlab>=3.0.14",
 ]
+server = [
+    "asgiref>=3.8.1",
+    "fastapi>=0.115.7",
+    "python-multipart>=0.0.20",
+    "uvicorn>=0.34.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

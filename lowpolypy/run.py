@@ -1,6 +1,4 @@
-import cv2
-from pathlib import Path
-from loguru import logger
+import logging
 import numpy as np
 
 from lowpolypy.image_utils import resize_image
@@ -13,27 +11,17 @@ from .point_generators import (
 )
 from .polygon_generators import generate_delaunay_polygons, rescale_polygons
 
+logger = logging.getLogger(__name__)
+
 
 def run(
     *,
-    source: Path,
-    destination: Path | None = None,
+    image: np.ndarray,
     conv_points_num_points: int,
     conv_points_num_filler_points: int,
     weight_filler_points: bool,
     output_size: int,
 ) -> np.ndarray:
-    # Validate & expand paths
-    source = validate_image_source(source)
-    destination_dir = parse_or_infer_destination(destination, source=source)
-    destination_dir.mkdir(exist_ok=True, parents=True)
-    output_filename = source.stem
-    output_path = (destination_dir / output_filename).with_suffix(".png")
-
-    # Load image
-    logger.info(f"Processing {source}...")
-    image = cv2.imread(str(source))
-
     # Run the pipeline
     logger.info("Computing points...")
     points = conv_points(
@@ -56,31 +44,4 @@ def run(
     )
     shaded_image = shade_kmeans(image=resized_image, polygons=resized_polygons)
 
-    # Save the output
-    logger.info(f"Writing output to: {output_path}")
-    cv2.imwrite(
-        str(output_path),
-        shaded_image,
-        [cv2.IMWRITE_PNG_COMPRESSION, 9],
-    )
-    logger.info("Done.")
     return shaded_image
-
-
-def parse_or_infer_destination(
-    destination: Path | None, source: Path | None = None, subdir="lowpoly"
-):
-    if destination:
-        destination = destination.expanduser().resolve()
-    elif source:
-        destination = (source if source.is_dir() else source.parent) / subdir
-    else:
-        raise ValueError("Destination and source can't both be null.")
-    return destination
-
-
-def validate_image_source(source: Path) -> Path:
-    source = source.expanduser().resolve()
-    if not source.exists():
-        raise ValueError(f"Invalid source path: {source}")
-    return source
