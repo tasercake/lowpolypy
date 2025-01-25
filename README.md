@@ -1,4 +1,5 @@
 # LowPolyPy
+
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/maschere/6c789d70bbdaed2d89e1742f9d50a508/lowpolypy.ipynb)
 
 Generate Low-Poly Versions of Images:
@@ -12,6 +13,7 @@ This repo is being overhauled and new features are being added.
 The Colab notebook and setup instructions may not work at the moment.
 
 ## Run it on Colab
+
 [Run this notebook in Google Colab](https://colab.research.google.com/gist/maschere/6c789d70bbdaed2d89e1742f9d50a508/lowpolypy.ipynb) to get started quickly.
 
 Thanks to [@maschere](https://gist.github.com/maschere/6c789d70bbdaed2d89e1742f9d50a508) for putting this notebook together!
@@ -33,12 +35,10 @@ cd lowpolypy
 
 ### Installing
 
-> Lowpolypy can't be installed via `pip` (yet), but the setup is simple nonetheless.
-
 Install dependencies:
 
 ```bash
-pip install .
+uv sync
 ```
 
 ### Try It Out
@@ -46,16 +46,16 @@ pip install .
 From the root of the project directory, run
 
 ```bash
-python -m lowpolypy run './images/giraffe.jpg'
+python -m lowpolypy './images/giraffe.jpg'
 ```
 
 This should create a new image in the `images` directory.
 
 ## Built With
 
-* [OpenCV](https://opencv.org/releases/) - Image manipulation library
-* [PIL](https://pillow.readthedocs.io/en/stable/) - For easy(er) image I/O
-* [NumPy & SciPy](https://www.scipy.org/) - Matrix ops, Triangulation, Voronoi tesselation, etc.
+- [OpenCV](https://opencv.org/releases/) - Image manipulation library
+- [Shapely](https://shapely.readthedocs.io/) - For geometry operations
+- [NumPy & SciPy](https://www.scipy.org/) - Matrix ops, Triangulation, Voronoi tesselation, etc.
 
 ## License
 

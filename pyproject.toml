@@ -1,28 +1,31 @@
-[tool.poetry]
+[project]
 name = "lowpolypy"
 version = "0.1.0"
 description = "A tool to create low-poly versions of images"
-authors = ["Krishna Penukonda <penukonda.krishna.moorthy@gmail.com>"]
+authors = [{ name = "Krishna Penukonda", email = "krishna@penukonda.me" }]
 license = "MIT"
+readme = "README.md"
+requires-python = ">=3.13"
 
-[tool.poetry.dependencies]
-python = "^3.8"
-Pillow = "^8.1.2"
-opencv-python = "^4.5.1"
-scikit-image = "numpy"
-numpy = "1.19.3"
-scipy = "^1.6.1"
-shapely = "1.6.4"
-matplotlib = "^3.3.4"
-torch = "^1.8.0"
-torchvision = "^0.9.0"
-torchaudio = "^0.8.0"
+dependencies = [
+    "Pillow>=8.1.2",
+    "opencv-python>=4.5.1",
+    "scikit-image>=0.18.1",
+    "numpy>=1.20.1",
+    "scipy>=1.6.1",
+    "loguru>=0.7.3",
+    "typer>=0.15.1",
+    "shapely>=2.0.6",
+]
 
-[tool.poetry.dev-dependencies]
-black = "^20.8b1"
-jupyter = "^1.0.0"
-jupyterlab = "^3.0.14"
+[project.scripts]
+lowpolypy = "lowpolypy.cli:app"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "scipy-stubs>=1.15.1.0",
+    "types-shapely>=2.0.0.20241221",
+    "black>=20.8b1",
+    "jupyter>=1.0.0",
+    "jupyterlab>=3.0.14",
+]
