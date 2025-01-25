@@ -1,0 +1,15 @@
+# Python
+.mypy_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.pyz
+.python-version
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+notebooks
