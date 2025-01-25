@@ -41,12 +41,6 @@ Install dependencies:
 uv sync
 ```
 
-If you'd like to run the server locally, include the `server` dependency group:
-
-```shell
-uv sync --group server
-```
-
 ### Try It Out
 
 From the root of the project directory, run
@@ -56,6 +50,20 @@ lowpolypy './images/giraffe.jpg'
 ```
 
 This should create a new image in the `images` directory.
+
+## Run the server
+
+If you'd like to run the server locally, install the `server` dependency group:
+
+```shell
+uv sync --group server
+```
+
+Then serve the FastAPI app with uvicorn:
+
+```shell
+uvicorn lowpolypy.server:app --reload
+```
 
 ## Built With
 
