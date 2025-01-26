@@ -12,6 +12,7 @@ dependencies = [
     "scipy>=1.6.1",
     "typer>=0.15.1",
     "shapely>=2.0.6",
+    "torch>=2.5.1",
 ]
 
 [project.scripts]
