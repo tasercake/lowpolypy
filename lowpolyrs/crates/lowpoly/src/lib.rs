@@ -6,7 +6,7 @@ use imageproc::drawing::{
 
 use imageproc::pixelops::interpolate;
 use imageproc::point::Point;
-use log::{error, info};
+use log::{error, info, warn};
 
 mod point_generators;
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
@@ -101,6 +101,7 @@ pub fn to_lowpoly(
         let num_pixels = pixels.len() as u32;
         // Skip if the triangle has no pixels
         if num_pixels == 0 {
+            warn!("Detected a triangle with no pixels when filling polygons.");
             return Rgb([0, 0, 0]);
         }
         Rgb([
