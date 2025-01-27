@@ -1,12 +1,12 @@
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbImage};
 use imageproc::drawing::{draw_antialiased_line_segment_mut, draw_filled_circle_mut};
 
 use imageproc::pixelops::interpolate;
 use log::{error, info};
 
 mod point_generators;
-use point_generators::{generate_points_from_sobel, generate_random_points};
+use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 mod polygon_generators;
 use polygon_generators::get_delaunay_polygons;
 
@@ -22,8 +22,8 @@ pub struct LowPolyResult {
     pub original_image: DynamicImage,
     pub points: Vec<(u32, u32)>,
     pub polygons: Vec<[(f64, f64); 3]>,
-    pub debug_image: ImageBuffer<Rgb<u8>, Vec<u8>>,
-    pub lowpoly_image: ImageBuffer<Rgb<u8>, Vec<u8>>,
+    pub debug_images: Vec<DynamicImage>,
+    pub lowpoly_image: RgbImage,
 }
 
 /// Generate a low-poly version of an image.
@@ -46,7 +46,10 @@ pub fn to_lowpoly(
     }
 
     // Generate anchor points from the image
-    let mut points = generate_points_from_sobel(&image, num_points.unwrap_or(1000));
+    let SobelResult {
+        sobel_image,
+        mut points,
+    } = generate_points_from_sobel(&image, num_points.unwrap_or(1000));
     info!("Generated {} anchor points.", points.len());
     // Generate a few more random points around the image
     let random_points = generate_random_points(
@@ -70,8 +73,8 @@ pub fn to_lowpoly(
 
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
-    let mut debug_image_buffer = ImageBuffer::from_pixel(width, height, Rgb([0, 0, 0]));
-    let lowpoly_image_buffer = ImageBuffer::from_pixel(width, height, Rgb([0, 0, 0]));
+    let mut debug_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
+    let lowpoly_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
 
     draw_points(&mut debug_image_buffer, &points);
 
@@ -106,7 +109,10 @@ pub fn to_lowpoly(
         original_image: image,
         points,
         polygons,
-        debug_image: debug_image_buffer,
+        debug_images: vec![
+            DynamicImage::ImageRgb8(debug_image_buffer),
+            DynamicImage::ImageLuma16(sobel_image),
+        ],
         lowpoly_image: resized,
     })
 }

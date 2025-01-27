@@ -61,7 +61,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_string_lossy()
         .to_string();
     let output_path = destination_dir.join(format!("{}.png", source_stem));
-    let debug_path = destination_dir.join(format!("{}_debug.png", source_stem));
 
     // Load image
     info!("Processing {} ...", source.display());
@@ -89,12 +88,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .lowpoly_image
         .save_with_format(&output_path, ImageFormat::Png)?;
 
-    // Save the debug image with suffix "_debug"
-    result
-        .as_ref()
-        .unwrap()
-        .debug_image
-        .save_with_format(&debug_path, ImageFormat::Png)?;
+    // Save the debug images with suffix "_debug{index}"
+    for (i, debug_image) in result.as_ref().unwrap().debug_images.iter().enumerate() {
+        let debug_path = destination_dir.join(format!("{}_debug{}.png", source_stem, i));
+        debug_image.save_with_format(&debug_path, ImageFormat::Png)?;
+    }
 
     Ok(())
 }
