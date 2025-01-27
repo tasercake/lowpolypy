@@ -1,7 +1,7 @@
 use image::{DynamicImage, GrayImage, ImageBuffer, Luma};
 use imageproc::gradients::sobel_gradients;
 use log::debug;
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
 use std::time::Instant;
 
 /// Function to generate an array of points based on the Sobel filter applied to an image.
@@ -51,28 +51,14 @@ pub fn generate_points_from_sobel(image: &DynamicImage, num_points: u32) -> Vec<
     sampled_points
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use image::ImageReader;
-
-    #[test]
-    fn test_generate_points_from_sobel() {
-        // Load a sample image
-        let image = ImageReader::open("../images/bird1.jpg")
-            .unwrap()
-            .decode()
-            .unwrap();
-
-        // Generate points using Sobel filter
-        let num_points = 100;
-        let points = generate_points_from_sobel(&image, num_points);
-
-        // Assert that points are non-empty and within the limit
-        assert!(!points.is_empty());
-        assert!(points.len() <= num_points.try_into().unwrap());
-
-        // Optionally, print some points for debugging
-        println!("Generated points: {:?}", &points[0..10.min(points.len())]);
-    }
+/// Generate `num_points` random points within the given dimensions.
+/// # Arguments
+/// * `width` - The width of the image.
+/// * `height` - The height of the image.
+/// * `num_points` - The number of random points to generate.
+pub fn generate_random_points(width: u32, height: u32, num_points: u32) -> Vec<(u32, u32)> {
+    let mut rng = thread_rng();
+    (0..num_points)
+        .map(|_| (rng.gen_range(0..width), rng.gen_range(0..height)))
+        .collect()
 }

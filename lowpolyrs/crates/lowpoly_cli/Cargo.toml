@@ -14,7 +14,6 @@ license.workspace = true
 name = "lowpoly"
 path = "src/main.rs"
 
-
 [dependencies]
 # 1st-party crates
 lowpoly = { workspace = true }
@@ -22,6 +21,8 @@ lowpoly = { workspace = true }
 # External dependencies
 clap = { workspace = true }
 env_logger = { workspace = true }
+image = { workspace = true }
+log = { workspace = true }
 
 [lints]
 workspace = true
