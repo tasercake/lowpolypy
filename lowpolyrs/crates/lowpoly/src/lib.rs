@@ -1,18 +1,20 @@
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Pixel, Rgb, RgbImage};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbImage, Rgba, RgbaImage};
 use imageproc::drawing::{
     draw_antialiased_line_segment_mut, draw_antialiased_polygon_mut, draw_filled_circle_mut,
 };
 
 use imageproc::pixelops::interpolate;
 use imageproc::point::Point;
-use log::{error, info, warn};
+use log::{error, info};
 
+mod colors;
 mod point_generators;
-use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 mod polygon_generators;
-use polygon_generators::get_delaunay_polygons;
 mod polygon_utils;
+use colors::find_dominant_color;
+use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
+use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
 
 pub mod file_utils;
@@ -28,7 +30,7 @@ pub struct LowPolyResult {
     pub points: Vec<(u32, u32)>,
     pub polygons: Vec<[(f64, f64); 3]>,
     pub debug_images: Vec<DynamicImage>,
-    pub lowpoly_image: RgbImage,
+    pub lowpoly_image: RgbaImage,
 }
 
 /// Generate a low-poly version of an image.
@@ -79,7 +81,7 @@ pub fn to_lowpoly(
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
     let mut debug_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
-    let mut lowpoly_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
+    let mut lowpoly_image_buffer = RgbaImage::from_pixel(width, height, Rgba([0, 0, 0, 0]));
 
     draw_points(&mut debug_image_buffer, &points);
 
@@ -88,28 +90,9 @@ pub fn to_lowpoly(
 
     let pixels_per_triangle = pixels_in_triangles(&polygons, &image);
     // For each triangle, compute the average color of the pixels within it
-    let triangle_colors = pixels_per_triangle.iter().map(|pixels| -> Rgb<u8> {
-        // Compute the average color of the pixels in the triangle
-        let (r, g, b) = pixels.iter().fold((0, 0, 0), |acc, pixel| {
-            let channels = pixel.channels();
-            (
-                acc.0 + channels[0] as u32,
-                acc.1 + channels[1] as u32,
-                acc.2 + channels[2] as u32,
-            )
-        });
-        let num_pixels = pixels.len() as u32;
-        // Skip if the triangle has no pixels
-        if num_pixels == 0 {
-            warn!("Detected a triangle with no pixels when filling polygons.");
-            return Rgb([0, 0, 0]);
-        }
-        Rgb([
-            (r / num_pixels) as u8,
-            (g / num_pixels) as u8,
-            (b / num_pixels) as u8,
-        ])
-    });
+    let triangle_colors = pixels_per_triangle
+        .iter()
+        .map(|pixels| find_dominant_color(pixels));
     draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, triangle_colors);
 
     draw_polygon_edges(&mut debug_image_buffer, &polygons);
@@ -193,11 +176,11 @@ pub fn draw_polygon_edges(
 ///
 /// The i32 cast in the points is necessary because `draw_filled_polygon_mut` expects integer pixel coordinates.
 pub fn draw_polygons_filled<C>(
-    image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     polygons: &Vec<[(f64, f64); 3]>,
     colors: C,
 ) where
-    C: IntoIterator<Item = Rgb<u8>>,
+    C: IntoIterator<Item = Rgba<u8>>,
 {
     // Zip the polygons together with their respective colors.
     for (polygon, color) in polygons.iter().zip(colors) {
