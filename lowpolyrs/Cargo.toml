@@ -23,6 +23,7 @@ image = "0.25.5"
 imageproc = "0.25.0"
 log = "0.4.25"
 rand = "0.8.5"
+spade = "2.12.1"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
