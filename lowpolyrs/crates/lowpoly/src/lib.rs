@@ -1,14 +1,19 @@
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbImage};
-use imageproc::drawing::{draw_antialiased_line_segment_mut, draw_filled_circle_mut};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Pixel, Rgb, RgbImage};
+use imageproc::drawing::{
+    draw_antialiased_line_segment_mut, draw_antialiased_polygon_mut, draw_filled_circle_mut,
+};
 
 use imageproc::pixelops::interpolate;
+use imageproc::point::Point;
 use log::{error, info};
 
 mod point_generators;
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 mod polygon_generators;
 use polygon_generators::get_delaunay_polygons;
+mod polygon_utils;
+use polygon_utils::pixels_in_triangles;
 
 pub mod file_utils;
 
@@ -74,14 +79,39 @@ pub fn to_lowpoly(
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
     let mut debug_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
-    let lowpoly_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
+    let mut lowpoly_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
 
     draw_points(&mut debug_image_buffer, &points);
 
     let polygons = get_delaunay_polygons(&points);
     info!("Generated {} polygons.", polygons.len());
 
-    draw_polygons(&mut debug_image_buffer, &polygons);
+    let pixels_per_triangle = pixels_in_triangles(&polygons, &image);
+    // For each triangle, compute the average color of the pixels within it
+    let triangle_colors = pixels_per_triangle.iter().map(|pixels| -> Rgb<u8> {
+        // Compute the average color of the pixels in the triangle
+        let (r, g, b) = pixels.iter().fold((0, 0, 0), |acc, pixel| {
+            let channels = pixel.channels();
+            (
+                acc.0 + channels[0] as u32,
+                acc.1 + channels[1] as u32,
+                acc.2 + channels[2] as u32,
+            )
+        });
+        let num_pixels = pixels.len() as u32;
+        // Skip if the triangle has no pixels
+        if num_pixels == 0 {
+            return Rgb([0, 0, 0]);
+        }
+        Rgb([
+            (r / num_pixels) as u8,
+            (g / num_pixels) as u8,
+            (b / num_pixels) as u8,
+        ])
+    });
+    draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, triangle_colors);
+
+    draw_polygon_edges(&mut debug_image_buffer, &polygons);
 
     // Resize to `output_size` but preserve aspect ratio.
     // `output_size` constrains the longest side of the generated image.
@@ -123,7 +153,10 @@ pub fn draw_points(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &[(u32, u3
     }
 }
 
-pub fn draw_polygons(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[(f64, f64); 3]>) {
+pub fn draw_polygon_edges(
+    image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    polygons: &Vec<[(f64, f64); 3]>,
+) {
     for polygon in polygons {
         let (p1, p2, p3) = (polygon[0], polygon[1], polygon[2]);
         draw_antialiased_line_segment_mut(
@@ -147,5 +180,32 @@ pub fn draw_polygons(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[
             Rgb([255, 255, 255]),
             interpolate,
         );
+    }
+}
+
+/// Draws each polygon from `polygons` filled with the corresponding color from `colors`.
+///
+/// - `image` is your target image buffer.
+/// - `polygons` is a list of triangles or polygons where each polygon is a slice of (f64,f64) coords.
+/// - `colors` is an iterator (e.g. a `Vec<Rgb<u8>>` or anything that can yield `Rgb<u8>`) providing
+///   the fill color for each polygon.
+///
+/// The i32 cast in the points is necessary because `draw_filled_polygon_mut` expects integer pixel coordinates.
+pub fn draw_polygons_filled<C>(
+    image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    polygons: &Vec<[(f64, f64); 3]>,
+    colors: C,
+) where
+    C: IntoIterator<Item = Rgb<u8>>,
+{
+    // Zip the polygons together with their respective colors.
+    for (polygon, color) in polygons.iter().zip(colors) {
+        // Convert each (f64,f64) into an `imageproc::point::Point<i32>`.
+        let pts: Vec<Point<i32>> = polygon
+            .iter()
+            .map(|&(x, y)| Point::new(x as i32, y as i32))
+            .collect();
+
+        draw_antialiased_polygon_mut(image, &pts, color, interpolate);
     }
 }
