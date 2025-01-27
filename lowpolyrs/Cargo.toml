@@ -1,12 +1,28 @@
-[package]
-name = "lowpolyrs"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
 
-[dependencies]
+[workspace.package]
+edition = "2021"
+rust-version = "1.80"
+homepage = "https://github.com/tasercake/lowpolypy/tree/master/lowpolyrs"
+documentation = "https://github.com/tasercake/lowpolypy/tree/master/lowpolyrs/README.md"
+repository = "https://github.com/tasercake/lowpolypy"
+authors = ["Krishna Penukonda <krishna@penukonda.me>"]
+license = "MIT"
+
+[workspace.dependencies]
+# 1st-party crates
+lowpoly_cli = { path = "crates/lowpoly_cli" }
+lowpoly = { path = "crates/lowpoly" }
+
+# External dependencies
 clap = { version = "4.5.27", features = ["cargo", "derive"] }
 env_logger = "0.11.6"
 image = "0.25.5"
 imageproc = "0.25.0"
 log = "0.4.25"
 rand = "0.8.5"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

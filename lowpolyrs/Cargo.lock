@@ -605,15 +605,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "lowpolyrs"
+name = "lowpoly"
 version = "0.1.0"
 dependencies = [
- "clap",
  "env_logger",
  "image",
  "imageproc",
  "log",
  "rand",
+]
+
+[[package]]
+name = "lowpoly_cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "lowpoly",
 ]
 
 [[package]]

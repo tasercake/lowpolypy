@@ -1,0 +1,21 @@
+[package]
+name = "lowpoly"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# External dependencies
+env_logger = { workspace = true }
+image = { workspace = true }
+imageproc = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+
+[lints]
+workspace = true
