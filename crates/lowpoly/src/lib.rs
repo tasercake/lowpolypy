@@ -11,7 +11,7 @@ use log::{error, info};
 mod colors;
 mod point_generators;
 mod polygon_generators;
-mod polygon_utils;
+pub mod polygon_utils;
 use colors::find_dominant_color;
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;

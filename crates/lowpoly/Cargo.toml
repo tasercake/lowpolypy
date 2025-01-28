@@ -10,7 +10,6 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-# External dependencies
 env_logger = { workspace = true }
 image = { workspace = true }
 imageproc = { workspace = true }
@@ -18,5 +17,12 @@ log = { workspace = true }
 rand = { workspace = true }
 spade = { workspace = true }
 
+[dev-dependencies]
+criterion = "0.5.1"
+
 [lints]
 workspace = true
+
+[[bench]]
+name = "polygon_utils_bench"
+harness = false
