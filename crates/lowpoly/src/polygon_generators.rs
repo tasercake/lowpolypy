@@ -12,6 +12,7 @@ pub fn get_delaunay_polygons(points: &[(u32, u32)]) -> Vec<[(f64, f64); 3]> {
     }
 
     let mut polygons = Vec::new();
+    polygons.reserve(delaunay.num_inner_faces());
 
     // Spade distinguishes between "inner" and "outer" faces,
     // so we iterate only over the valid (inner) triangular faces.
