@@ -39,3 +39,7 @@ harness = false
 [[bench]]
 name = "colors_bench"
 harness = false
+
+[[bench]]
+name = "lowpoly_bench"
+harness = false

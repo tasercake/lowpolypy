@@ -128,16 +128,13 @@ pub fn to_lowpoly(
     })
 }
 
-pub fn draw_points(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &[(u32, u32)]) {
+fn draw_points(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &[(u32, u32)]) {
     for point in points {
         draw_filled_circle_mut(image, (point.0 as i32, point.1 as i32), 8, Rgb([255, 0, 0]));
     }
 }
 
-pub fn draw_polygon_edges(
-    image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
-    polygons: &Vec<[(f64, f64); 3]>,
-) {
+fn draw_polygon_edges(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[(f64, f64); 3]>) {
     for polygon in polygons {
         let (p1, p2, p3) = (polygon[0], polygon[1], polygon[2]);
         draw_antialiased_line_segment_mut(
@@ -172,7 +169,7 @@ pub fn draw_polygon_edges(
 ///   the fill color for each polygon.
 ///
 /// The i32 cast in the points is necessary because `draw_filled_polygon_mut` expects integer pixel coordinates.
-pub fn draw_polygons_filled<C>(
+fn draw_polygons_filled<C>(
     image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
     polygons: &Vec<[(f64, f64); 3]>,
     colors: C,
