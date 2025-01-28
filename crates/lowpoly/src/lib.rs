@@ -57,14 +57,12 @@ pub fn to_lowpoly(
         sobel_image,
         mut points,
     } = generate_points_from_sobel(&image, num_points.unwrap_or(1000));
-    info!("Generated {} anchor points.", points.len());
     // Generate a few more random points around the image
     let random_points = generate_random_points(
         image.width(),
         image.height(),
         num_random_points.unwrap_or(100),
     );
-    info!("Generated {} random points.", random_points.len());
     // Combine the points into one vector
     points.extend(random_points.into_iter());
 
@@ -86,14 +84,14 @@ pub fn to_lowpoly(
     draw_points(&mut debug_image_buffer, &points);
 
     let polygons = get_delaunay_polygons(&points);
-    info!("Generated {} polygons.", polygons.len());
 
-    let pixels_per_triangle = pixels_in_triangles(&polygons, &image);
-    // For each triangle, compute the average color of the pixels within it
-    let triangle_colors = pixels_per_triangle
+    // Compute the fill color for each polygon
+    let pixels_per_polygon = pixels_in_triangles(&polygons, &image);
+    // For each polygon, compute the average color of the pixels within it
+    let polygon_colors = pixels_per_polygon
         .iter()
         .map(|pixels| find_dominant_color(pixels));
-    draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, triangle_colors);
+    draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, polygon_colors);
 
     draw_polygon_edges(&mut debug_image_buffer, &polygons);
 
