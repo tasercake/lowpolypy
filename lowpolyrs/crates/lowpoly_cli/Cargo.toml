@@ -1,0 +1,28 @@
+[package]
+name = "lowpoly_cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+# Emit a binary named `lowpoly`
+name = "lowpoly"
+path = "src/main.rs"
+
+[dependencies]
+# 1st-party crates
+lowpoly = { workspace = true }
+
+# External dependencies
+clap = { workspace = true }
+env_logger = { workspace = true }
+image = { workspace = true }
+log = { workspace = true }
+
+[lints]
+workspace = true
