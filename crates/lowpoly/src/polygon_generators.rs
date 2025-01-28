@@ -1,14 +1,21 @@
-use spade::{DelaunayTriangulation, Point2, Triangulation};
+use num_traits::NumCast;
+use spade::{DelaunayTriangulation, Point2, SpadeNum, Triangulation};
 
 /// Returns a vector of triangles, where each triangle is represented by
 /// three `(f64, f64)` coordinates.
-pub fn get_delaunay_polygons(points: &[(u32, u32)]) -> Vec<[(f64, f64); 3]> {
+pub fn get_delaunay_polygons<T>(points: &[(T, T)]) -> Vec<[(T, T); 3]>
+where
+    T: NumCast + Copy + SpadeNum,
+{
     // Build a DelaunayTriangulation with floating-point coordinates
-    let mut delaunay = DelaunayTriangulation::<Point2<f64>>::new();
+    let mut delaunay = DelaunayTriangulation::<Point2<T>>::new();
 
     // Insert the points into the triangulation
     for &(x, y) in points {
-        let _ = delaunay.insert(Point2::new(x as f64, y as f64));
+        let _ = delaunay.insert(Point2::new(
+            NumCast::from(x).unwrap(),
+            NumCast::from(y).unwrap(),
+        ));
     }
 
     let mut polygons = Vec::new();

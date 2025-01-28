@@ -758,7 +758,9 @@ dependencies = [
  "imageproc",
  "itertools 0.14.0",
  "log",
+ "num-traits",
  "rand",
+ "rayon",
  "spade",
 ]
 

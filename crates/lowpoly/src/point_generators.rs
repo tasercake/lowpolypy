@@ -1,11 +1,12 @@
 use image::{DynamicImage, GrayImage, ImageBuffer, Luma};
 use imageproc::gradients::sobel_gradients;
 use log::debug;
+use num_traits::NumCast;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 
-pub struct SobelResult {
+pub struct SobelResult<T> {
     pub sobel_image: ImageBuffer<Luma<u16>, Vec<u16>>,
-    pub points: Vec<(u32, u32)>,
+    pub points: Vec<(T, T)>,
 }
 
 /// Function to generate an array of points based on the Sobel filter applied to an image.
@@ -14,9 +15,15 @@ pub struct SobelResult {
 /// * `image` - A reference to a DynamicImage that represents the input image.
 /// * `num_points` - The number of points to sample randomly from the Sobel gradient image.
 ///
+/// # Type Parameters
+/// * `T` - The numeric type for point coordinates. Can be integers (signed/unsigned) or floats.
+///
 /// # Returns
-/// * `Vec<(u32, u32)>` - A vector of (x, y) coordinates representing sampled points of interest.
-pub fn generate_points_from_sobel(image: &DynamicImage, num_points: u32) -> SobelResult {
+/// * `SobelResult<T>` - Contains the Sobel gradient image and sampled points of interest.
+pub fn generate_points_from_sobel<T>(image: &DynamicImage, num_points: u32) -> SobelResult<T>
+where
+    T: NumCast + Copy,
+{
     // Convert the image to grayscale
     let grayscale: GrayImage = image.to_luma8();
 
@@ -33,7 +40,10 @@ pub fn generate_points_from_sobel(image: &DynamicImage, num_points: u32) -> Sobe
 
     for (x, y, pixel) in sobel_gradient.enumerate_pixels() {
         if pixel[0] as u16 > threshold {
-            points.push((x, y));
+            // Convert coordinates to target type T
+            if let (Some(tx), Some(ty)) = (T::from(x), T::from(y)) {
+                points.push((tx, ty));
+            }
         }
     }
 
@@ -57,9 +67,17 @@ pub fn generate_points_from_sobel(image: &DynamicImage, num_points: u32) -> Sobe
 /// * `width` - The width of the image.
 /// * `height` - The height of the image.
 /// * `num_points` - The number of random points to generate.
-pub fn generate_random_points(width: u32, height: u32, num_points: u32) -> Vec<(u32, u32)> {
+pub fn generate_random_points<T>(width: u32, height: u32, num_points: u32) -> Vec<(T, T)>
+where
+    T: NumCast + Copy,
+{
     let mut rng = thread_rng();
     (0..num_points)
-        .map(|_| (rng.gen_range(0..width), rng.gen_range(0..height)))
+        .map(|_| {
+            (
+                T::from(rng.gen_range(0..width)).unwrap(),
+                T::from(rng.gen_range(0..height)).unwrap(),
+            )
+        })
         .collect()
 }

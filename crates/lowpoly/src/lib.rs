@@ -14,6 +14,7 @@ pub mod polygon_generators;
 pub mod polygon_utils;
 
 use colors::find_dominant_color_median_cut;
+use num_traits::{Num, NumCast};
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
@@ -24,10 +25,10 @@ use polygon_utils::pixels_in_triangles;
 /// * `points` - The anchor points sampled from the image.
 /// * `polygons` - The Delaunay triangulation polygons.
 /// * `lowpoly` - The low-poly version of the image.
-pub struct LowPolyResult {
+pub struct LowPolyResult<T: Num> {
     pub original_image: DynamicImage,
-    pub points: Vec<(u32, u32)>,
-    pub polygons: Vec<[(f64, f64); 3]>,
+    pub points: Vec<(T, T)>,
+    pub polygons: Vec<[(T, T); 3]>,
     pub debug_images: Vec<DynamicImage>,
     pub lowpoly_image: RgbaImage,
 }
@@ -44,7 +45,7 @@ pub fn to_lowpoly(
     num_points: Option<u32>,
     num_random_points: Option<u32>,
     output_size: u32,
-) -> Result<LowPolyResult, Box<dyn std::error::Error>> {
+) -> Result<LowPolyResult<f32>, Box<dyn std::error::Error>> {
     // Check if it's "empty" (in the sense of zero dimensions):
     if image.width() == 0 || image.height() == 0 {
         error!("Error: The loaded image has zero width or height.");
@@ -55,7 +56,7 @@ pub fn to_lowpoly(
     let SobelResult {
         sobel_image,
         mut points,
-    } = generate_points_from_sobel(&image, num_points.unwrap_or(1000));
+    } = generate_points_from_sobel::<f32>(&image, num_points.unwrap_or(1000));
     // Generate a few more random points around the image
     let random_points = generate_random_points(
         image.width(),
@@ -66,12 +67,12 @@ pub fn to_lowpoly(
     points.extend(random_points.into_iter());
 
     // Add image corners as anchor points
-    let (width, height) = image.dimensions();
+    let (width, height) = (image.width() as f32, image.height() as f32);
     let corners = vec![
-        (0, 0),
-        (width - 1, 0),
-        (0, height - 1),
-        (width - 1, height - 1),
+        (0.0, 0.0),
+        (width - 1.0, 0.0),
+        (0.0, height - 1.0),
+        (width - 1.0, height - 1.0),
     ];
     points.extend(corners.into_iter());
 
@@ -128,33 +129,44 @@ pub fn to_lowpoly(
     })
 }
 
-fn draw_points(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &[(u32, u32)]) {
+fn draw_points<T>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &[(T, T)])
+where
+    T: NumCast,
+{
     for point in points {
-        draw_filled_circle_mut(image, (point.0 as i32, point.1 as i32), 8, Rgb([255, 0, 0]));
+        draw_filled_circle_mut(
+            image,
+            (point.0.to_i32().unwrap(), point.1.to_i32().unwrap()),
+            8,
+            Rgb([255, 0, 0]),
+        );
     }
 }
 
-fn draw_polygon_edges(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[(f64, f64); 3]>) {
+fn draw_polygon_edges<T>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[(T, T); 3]>)
+where
+    T: NumCast + Copy,
+{
     for polygon in polygons {
         let (p1, p2, p3) = (polygon[0], polygon[1], polygon[2]);
         draw_antialiased_line_segment_mut(
             image,
-            (p1.0 as i32, p1.1 as i32),
-            (p2.0 as i32, p2.1 as i32),
+            (p1.0.to_i32().unwrap(), p1.1.to_i32().unwrap()),
+            (p2.0.to_i32().unwrap(), p2.1.to_i32().unwrap()),
             Rgb([255, 255, 255]),
             interpolate,
         );
         draw_antialiased_line_segment_mut(
             image,
-            (p2.0 as i32, p2.1 as i32),
-            (p3.0 as i32, p3.1 as i32),
+            (p2.0.to_i32().unwrap(), p2.1.to_i32().unwrap()),
+            (p3.0.to_i32().unwrap(), p3.1.to_i32().unwrap()),
             Rgb([255, 255, 255]),
             interpolate,
         );
         draw_antialiased_line_segment_mut(
             image,
-            (p3.0 as i32, p3.1 as i32),
-            (p1.0 as i32, p1.1 as i32),
+            (p3.0.to_i32().unwrap(), p3.1.to_i32().unwrap()),
+            (p1.0.to_i32().unwrap(), p1.1.to_i32().unwrap()),
             Rgb([255, 255, 255]),
             interpolate,
         );
@@ -171,7 +183,7 @@ fn draw_polygon_edges(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<
 /// The i32 cast in the points is necessary because `draw_filled_polygon_mut` expects integer pixel coordinates.
 fn draw_polygons_filled<C>(
     image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
-    polygons: &Vec<[(f64, f64); 3]>,
+    polygons: &Vec<[(f32, f32); 3]>,
     colors: C,
 ) where
     C: IntoIterator<Item = Rgba<u8>>,

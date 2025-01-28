@@ -3,18 +3,18 @@ use lowpoly::polygon_generators::get_delaunay_polygons;
 
 fn bench_get_delaunay_polygons(c: &mut Criterion) {
     // Example dummy data:
-    let points = vec![
-        (0, 0),
-        (10, 0),
-        (5, 8),
-        (2, 2),
-        (12, 2),
-        (7, 10),
-        (15, 15),
-        (20, 20),
-        (25, 25),
-        (30, 30),
-        (35, 35),
+    let points: Vec<(f32, f32)> = vec![
+        (0.0, 0.0),
+        (10.0, 0.0),
+        (5.0, 8.0),
+        (2.0, 2.0),
+        (12.0, 2.0),
+        (7.0, 10.0),
+        (15.0, 15.0),
+        (20.0, 20.0),
+        (25.0, 25.0),
+        (30.0, 30.0),
+        (35.0, 35.0),
     ];
 
     c.bench_function("get_delaunay_polygons", |b| {
@@ -24,8 +24,13 @@ fn bench_get_delaunay_polygons(c: &mut Criterion) {
     });
 
     // Test with a larger set of 1000 random points
-    let points_large: Vec<(u32, u32)> = (0..1000)
-        .map(|_| (rand::random::<u32>() % 1000, rand::random::<u32>() % 1000))
+    let points_large: Vec<(f32, f32)> = (0..1000)
+        .map(|_| {
+            (
+                rand::random::<f32>() % 1000.0,
+                rand::random::<f32>() % 1000.0,
+            )
+        })
         .collect();
     c.bench_function("get_delaunay_polygons", |b| {
         b.iter(|| {

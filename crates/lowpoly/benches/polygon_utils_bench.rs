@@ -21,19 +21,23 @@ fn bench_pixels_in_triangles(c: &mut Criterion) {
         });
     });
 
-    // Test with a larger set of 1000 random triangles:
+    // Test with a larger set of 1000 deterministic triangles of varying (but deterministic) sizes:
     let polygons_large = (0..1000)
-        .map(|_| {
-            let x1 = rand::random::<f64>() * IMAGE_DIMENSIONS.0 as f64;
-            let y1 = rand::random::<f64>() * IMAGE_DIMENSIONS.1 as f64;
-            let x2 = rand::random::<f64>() * IMAGE_DIMENSIONS.0 as f64;
-            let y2 = rand::random::<f64>() * IMAGE_DIMENSIONS.1 as f64;
-            let x3 = rand::random::<f64>() * IMAGE_DIMENSIONS.0 as f64;
-            let y3 = rand::random::<f64>() * IMAGE_DIMENSIONS.1 as f64;
-            [(x1, y1), (x2, y2), (x3, y3)]
+        .map(|i| {
+            let size = (i % 100) + 1;
+            let x = (i % 20) as f32 * 20.0;
+            let y = (i / 20) as f32;
+            [
+                (x, y),
+                ((x + size as f32) % IMAGE_DIMENSIONS.0 as f32, y),
+                (
+                    (x + (size as f32 / 2.0)) % IMAGE_DIMENSIONS.0 as f32,
+                    (y + size as f32) % IMAGE_DIMENSIONS.1 as f32,
+                ),
+            ]
         })
-        .collect::<Vec<[(f64, f64); 3]>>();
-    c.bench_function("pixels_in_triangles", |b| {
+        .collect();
+    c.bench_function("pixels_in_triangles_large", |b| {
         b.iter(|| {
             let _ = pixels_in_triangles(black_box(&polygons_large), black_box(&img));
         });
