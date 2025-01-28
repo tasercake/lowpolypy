@@ -30,3 +30,7 @@ harness = false
 [[bench]]
 name = "polygon_generators_bench"
 harness = false
+
+[[bench]]
+name = "point_generators_bench"
+harness = false
