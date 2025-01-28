@@ -9,7 +9,7 @@ Generate Low-Poly Versions of Images:
 ## Usage
 
 ```shell
-cargo run --release -p lowpoly_cli ./images/bird1.jpg
+cargo run --release -p lowpoly_cli ./images/bird.jpg
 ```
 
 ## Built With
