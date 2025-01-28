@@ -26,3 +26,7 @@ workspace = true
 [[bench]]
 name = "polygon_utils_bench"
 harness = false
+
+[[bench]]
+name = "polygon_generators_bench"
+harness = false

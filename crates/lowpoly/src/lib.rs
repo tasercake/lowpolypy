@@ -3,21 +3,20 @@ use image::{DynamicImage, GenericImageView, ImageBuffer, Rgb, RgbImage, Rgba, Rg
 use imageproc::drawing::{
     draw_antialiased_line_segment_mut, draw_antialiased_polygon_mut, draw_filled_circle_mut,
 };
-
 use imageproc::pixelops::interpolate;
 use imageproc::point::Point;
 use log::{error, info};
 
-mod colors;
-mod point_generators;
-mod polygon_generators;
+pub mod colors;
+pub mod file_utils;
+pub mod point_generators;
+pub mod polygon_generators;
 pub mod polygon_utils;
+
 use colors::find_dominant_color;
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
-
-pub mod file_utils;
 
 /// Return struct for the `to_lowpoly` function.
 /// # Fields
