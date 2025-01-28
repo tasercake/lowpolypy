@@ -1,4 +1,5 @@
 use image::{Pixel, Rgba};
+use itertools::Itertools;
 use log::warn;
 use rand::{seq::SliceRandom, thread_rng};
 
@@ -29,7 +30,7 @@ pub fn find_mean_color(pixels: &Vec<Rgba<u8>>) -> Rgba<u8> {
 /// 1. Choosing k random centroids
 /// 2. Iterating the k-means assignment & update steps
 /// 3. Picking the centroid of the largest cluster
-pub fn find_dominant_color(pixels: &Vec<Rgba<u8>>) -> Rgba<u8> {
+pub fn find_dominant_color_kmeans(pixels: &Vec<Rgba<u8>>) -> Rgba<u8> {
     // If we have no pixels, return a default color (transparent black here).
     if pixels.is_empty() {
         return Rgba([0, 0, 0, 0]);
@@ -137,4 +138,54 @@ fn color_distance_squared(c1: &Rgba<u8>, c2: &Rgba<u8>) -> u32 {
     let db = b1 as i32 - b2 as i32;
     let da = a1 as i32 - a2 as i32;
     (dr * dr + dg * dg + db * db + da * da) as u32
+}
+
+pub fn find_dominant_color_median_cut(pixels: &Vec<Rgba<u8>>) -> Rgba<u8> {
+    if pixels.is_empty() {
+        return Rgba([0, 0, 0, 0]);
+    }
+
+    // Number of desired colors (or boxes)
+    let num_colors = 1;
+
+    // Create a box containing all pixels
+    let mut boxes = vec![pixels.clone()];
+
+    // Split boxes until we have the desired number of colors
+    while boxes.len() < num_colors {
+        // Find the box with the largest range
+        let (box_index, channel) = boxes
+            .iter()
+            .enumerate()
+            .map(|(i, b)| {
+                let (min_r, max_r) = b.iter().map(|p| p[0]).minmax().into_option().unwrap();
+                let (min_g, max_g) = b.iter().map(|p| p[1]).minmax().into_option().unwrap();
+                let (min_b, max_b) = b.iter().map(|p| p[2]).minmax().into_option().unwrap();
+                let (min_a, max_a) = b.iter().map(|p| p[3]).minmax().into_option().unwrap();
+
+                let ranges = [max_r - min_r, max_g - min_g, max_b - min_b, max_a - min_a];
+                let max_range = ranges
+                    .iter()
+                    .enumerate()
+                    .max_by_key(|&(_, &range)| range)
+                    .unwrap();
+                (i, max_range.0)
+            })
+            .max_by_key(|&(_, range)| range)
+            .unwrap();
+
+        // Sort the box by the channel with the largest range
+        boxes[box_index].sort_by_key(|p| p[channel]);
+
+        // Split the box at the median
+        let median = boxes[box_index].len() / 2;
+        let second_half = boxes[box_index].split_off(median);
+        boxes.push(second_half);
+    }
+
+    // Find the most populated box
+    let most_populated_box = boxes.into_iter().max_by_key(|b| b.len()).unwrap();
+
+    // Calculate the average color of the most populated box
+    find_mean_color(&most_populated_box)
 }
