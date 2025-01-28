@@ -13,7 +13,7 @@ pub mod point_generators;
 pub mod polygon_generators;
 pub mod polygon_utils;
 
-use colors::find_dominant_color;
+use colors::find_dominant_color_kmeans;
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
@@ -89,7 +89,7 @@ pub fn to_lowpoly(
     // For each polygon, compute the average color of the pixels within it
     let polygon_colors = pixels_per_polygon
         .iter()
-        .map(|pixels| find_dominant_color(pixels));
+        .map(|pixels| find_dominant_color_kmeans(pixels));
     draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, polygon_colors);
 
     draw_polygon_edges(&mut debug_image_buffer, &polygons);
