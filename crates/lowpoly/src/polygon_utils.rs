@@ -17,27 +17,7 @@ where
     for &triangle in triangles {
         let [(x1, y1), (x2, y2), (x3, y3)] = triangle;
 
-        // Compute the bounding box of the triangle, clamped to image bounds
-        let min_x = clamp_to_bounds(
-            triangle.iter().map(|(x, _)| *x as i32).min().unwrap_or(0),
-            0,
-            width as i32 - 1,
-        );
-        let max_x = clamp_to_bounds(
-            triangle.iter().map(|(x, _)| *x as i32).max().unwrap_or(0),
-            0,
-            width as i32 - 1,
-        );
-        let min_y = clamp_to_bounds(
-            triangle.iter().map(|(_, y)| *y as i32).min().unwrap_or(0),
-            0,
-            height as i32 - 1,
-        );
-        let max_y = clamp_to_bounds(
-            triangle.iter().map(|(_, y)| *y as i32).max().unwrap_or(0),
-            0,
-            height as i32 - 1,
-        );
+        let (min_x, max_x, min_y, max_y) = bounding_box_i32(x1, y1, x2, y2, x3, y3, width, height);
 
         let mut pixels = Vec::new();
 
@@ -70,7 +50,7 @@ where
 }
 
 /// Check if a point (px, py) lies within the triangle formed by (x1,y1), (x2,y2), (x3,y3)
-/// using barycentric coordinates.
+/// using half-plane checks.
 fn point_in_triangle(
     px: f64,
     py: f64,
@@ -78,57 +58,44 @@ fn point_in_triangle(
     (x2, y2): (f64, f64),
     (x3, y3): (f64, f64),
 ) -> bool {
-    // Using the barycentric technique:
-    //
-    // 1) Compute vectors:
-    //    v0 = C - A
-    //    v1 = B - A
-    //    v2 = P - A
-    //
-    // 2) Compute dot products:
-    //    dot00 = v0 · v0
-    //    dot01 = v0 · v1
-    //    dot02 = v0 · v2
-    //    dot11 = v1 · v1
-    //    dot12 = v1 · v2
-    //
-    // 3) Compute barycentric coordinates:
-    //    denom = dot00 * dot11 - dot01 * dot01
-    //    invDenom = 1 / denom
-    //    u = (dot11 * dot02 - dot01 * dot12) * invDenom
-    //    v = (dot00 * dot12 - dot01 * dot02) * invDenom
-    //
-    // 4) Check if point is in triangle:
-    //    (u >= 0) && (v >= 0) && (u + v < 1)
-
-    let (ax, ay) = (x1, y1);
-    let (bx, by) = (x2, y2);
-    let (cx, cy) = (x3, y3);
-
-    let v0 = (cx - ax, cy - ay);
-    let v1 = (bx - ax, by - ay);
-    let v2 = (px - ax, py - ay);
-
-    let dot00 = v0.0 * v0.0 + v0.1 * v0.1;
-    let dot01 = v0.0 * v1.0 + v0.1 * v1.1;
-    let dot02 = v0.0 * v2.0 + v0.1 * v2.1;
-    let dot11 = v1.0 * v1.0 + v1.1 * v1.1;
-    let dot12 = v1.0 * v2.0 + v1.1 * v2.1;
-
-    let denom = dot00 * dot11 - dot01 * dot01;
-    if denom.abs() < f64::EPSILON {
-        // Degenerate triangle => treat as "no coverage."
-        return false;
-    }
-
-    let inv_denom = 1.0 / denom;
-    let u = (dot11 * dot02 - dot01 * dot12) * inv_denom;
-    let v = (dot00 * dot12 - dot01 * dot02) * inv_denom;
-
-    (u >= 0.0) && (v >= 0.0) && (u + v < 1.0)
+    // Half-plane checks:
+    let sign = |(ax, ay), (bx, by), (cx, cy)| (ax - cx) * (by - cy) - (bx - cx) * (ay - cy);
+    let d1 = sign((px, py), (x1, y1), (x2, y2));
+    let d2 = sign((px, py), (x2, y2), (x3, y3));
+    let d3 = sign((px, py), (x3, y3), (x1, y1));
+    let has_neg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+    let has_pos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+    !(has_neg && has_pos)
 }
 
 /// Clamps value to the given min/max inclusive.
 fn clamp_to_bounds(value: i32, min_val: i32, max_val: i32) -> i32 {
     max(min_val, min(value, max_val))
+}
+
+fn bounding_box_i32(
+    x1: f64,
+    y1: f64,
+    x2: f64,
+    y2: f64,
+    x3: f64,
+    y3: f64,
+    width: u32,
+    height: u32,
+) -> (i32, i32, i32, i32) {
+    let (min_x, max_x) = {
+        let (min_xf, max_xf) = (x1.min(x2).min(x3), x1.max(x2).max(x3));
+        (
+            clamp_to_bounds(min_xf as i32, 0, width as i32 - 1),
+            clamp_to_bounds(max_xf as i32, 0, width as i32 - 1),
+        )
+    };
+    let (min_y, max_y) = {
+        let (min_yf, max_yf) = (y1.min(y2).min(y3), y1.max(y2).max(y3));
+        (
+            clamp_to_bounds(min_yf as i32, 0, height as i32 - 1),
+            clamp_to_bounds(max_yf as i32, 0, height as i32 - 1),
+        )
+    };
+    (min_x, max_x, min_y, max_y)
 }
