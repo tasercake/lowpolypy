@@ -14,7 +14,7 @@ cargo run --release -p lowpoly_cli ./images/bird1.jpg
 
 ## Built With
 
-- [image](https://opencv.org/releases/) - Image manipulation library
-- [imageproc](https://shapely.readthedocs.io/) - For geometry operations
+- [image](https://crates.io/crates/image) - Basic image processing library
+- [imageproc](https://crates.io/crates/imageproc) - For more advanced image processing & pixel ops
 
 - [OpenAI o1](https://openai.com/o1/) — Helped me figure out the trickly geometry algorithms
