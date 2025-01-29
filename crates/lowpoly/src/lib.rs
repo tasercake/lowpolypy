@@ -18,6 +18,7 @@ use num_traits::{Num, NumCast};
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
+use rayon::iter::ParallelIterator;
 
 /// Return struct for the `to_lowpoly` function.
 /// # Fields
@@ -25,10 +26,10 @@ use polygon_utils::pixels_in_triangles;
 /// * `points` - The anchor points sampled from the image.
 /// * `polygons` - The Delaunay triangulation polygons.
 /// * `lowpoly` - The low-poly version of the image.
-pub struct LowPolyResult<T: Num> {
+pub struct LowPolyResult<T: Num, P: Iterator<Item = (T, T)>, Poly: Iterator<Item = [(T, T); 3]>> {
     pub original_image: DynamicImage,
-    pub points: Vec<(T, T)>,
-    pub polygons: Vec<[(T, T); 3]>,
+    pub points: P,
+    pub polygons: Poly,
     pub debug_images: Vec<DynamicImage>,
     pub lowpoly_image: RgbaImage,
 }
@@ -45,7 +46,10 @@ pub fn to_lowpoly(
     num_points: Option<u32>,
     num_random_points: Option<u32>,
     output_size: u32,
-) -> Result<LowPolyResult<f32>, Box<dyn std::error::Error>> {
+) -> Result<
+    LowPolyResult<f32, impl Iterator<Item = (f32, f32)>, impl Iterator<Item = [(f32, f32); 3]>>,
+    Box<dyn std::error::Error>,
+> {
     // Check if it's "empty" (in the sense of zero dimensions):
     if image.width() == 0 || image.height() == 0 {
         error!("Error: The loaded image has zero width or height.");
@@ -63,37 +67,34 @@ pub fn to_lowpoly(
         image.height(),
         num_random_points.unwrap_or(100),
     );
-    // Combine the points into one vector
-    points.extend(random_points.into_iter());
-
-    // Add image corners as anchor points
     let (width, height) = (image.width() as f32, image.height() as f32);
-    let corners = vec![
-        (0.0, 0.0),
-        (width - 1.0, 0.0),
-        (0.0, height - 1.0),
-        (width - 1.0, height - 1.0),
-    ];
-    points.extend(corners.into_iter());
+    // Chain all iterators together
+    let points = points.chain(random_points).chain(
+        vec![
+            (0.0, 0.0),
+            (width - 1.0, 0.0),
+            (0.0, height - 1.0),
+            (width - 1.0, height - 1.0),
+        ]
+        .into_iter(),
+    );
 
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
     let mut debug_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
     let mut lowpoly_image_buffer = RgbaImage::from_pixel(width, height, Rgba([0, 0, 0, 0]));
 
-    draw_points(&mut debug_image_buffer, &points);
+    draw_points(&mut debug_image_buffer, points.copied());
 
-    let polygons = get_delaunay_polygons(&points);
+    let polygons = get_delaunay_polygons(points.clone());
 
     // Compute the fill color for each polygon
-    let pixels_per_polygon = pixels_in_triangles(&polygons, &image);
+    let pixels_per_polygon = pixels_in_triangles(polygons, &image);
     // For each polygon, compute the average color of the pixels within it
-    let polygon_colors = pixels_per_polygon
-        .iter()
-        .map(|pixels| find_dominant_color_median_cut(pixels));
-    draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, polygon_colors);
+    let polygon_colors = pixels_per_polygon.map(|pixels| find_dominant_color_median_cut(&pixels));
+    draw_polygons_filled(&mut lowpoly_image_buffer, polygons, polygon_colors);
 
-    draw_polygon_edges(&mut debug_image_buffer, &polygons);
+    draw_polygon_edges(&mut debug_image_buffer, polygons);
 
     // Resize to `output_size` but preserve aspect ratio.
     // `output_size` constrains the longest side of the generated image.
@@ -129,9 +130,10 @@ pub fn to_lowpoly(
     })
 }
 
-fn draw_points<T>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &[(T, T)])
+fn draw_points<T, P>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: P)
 where
     T: NumCast,
+    P: IntoIterator<Item = (T, T)>,
 {
     for point in points {
         draw_filled_circle_mut(
@@ -142,10 +144,10 @@ where
         );
     }
 }
-
-fn draw_polygon_edges<T>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[(T, T); 3]>)
+fn draw_polygon_edges<T, P>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: P)
 where
     T: NumCast + Copy,
+    P: IntoIterator<Item = [(T, T); 3]>,
 {
     for polygon in polygons {
         let (p1, p2, p3) = (polygon[0], polygon[1], polygon[2]);
@@ -176,25 +178,23 @@ where
 /// Draws each polygon from `polygons` filled with the corresponding color from `colors`.
 ///
 /// - `image` is your target image buffer.
-/// - `polygons` is a list of triangles or polygons where each polygon is a slice of (f64,f64) coords.
+/// - `polygons` is an iterator of triangles or polygons where each polygon is a slice of (f32,f32) coords.
 /// - `colors` is an iterator (e.g. a `Vec<Rgb<u8>>` or anything that can yield `Rgb<u8>`) providing
 ///   the fill color for each polygon.
 ///
 /// The i32 cast in the points is necessary because `draw_filled_polygon_mut` expects integer pixel coordinates.
-fn draw_polygons_filled<C>(
-    image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
-    polygons: &Vec<[(f32, f32); 3]>,
-    colors: C,
-) where
+fn draw_polygons_filled<P, C>(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, polygons: P, colors: C)
+where
+    P: IntoIterator<Item = [(f32, f32); 3]>,
     C: IntoIterator<Item = Rgba<u8>>,
 {
-    // Zip the polygons together with their respective colors.
-    for (polygon, color) in polygons.iter().zip(colors) {
-        // Convert each (f64,f64) into an `imageproc::point::Point<i32>`.
-        let pts: Vec<Point<i32>> = polygon
-            .iter()
-            .map(|&(x, y)| Point::new(x as i32, y as i32))
-            .collect();
+    // Consider using Iterator::zip directly instead of zipping in the loop
+    for (polygon, color) in polygons.into_iter().zip(colors) {
+        // Convert to Point<i32> using map() which preserves iterator efficiency
+        let pts = polygon.iter().map(|&(x, y)| Point::new(x as i32, y as i32));
+
+        // Collecting into Vec is necessary for the polygon drawing API
+        let pts: Vec<Point<i32>> = pts.collect();
 
         draw_antialiased_polygon_mut(image, &pts, color, interpolate);
     }

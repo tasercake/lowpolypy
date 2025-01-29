@@ -6,10 +6,10 @@ use rand::{seq::SliceRandom, thread_rng, Rng};
 
 pub struct SobelResult<T> {
     pub sobel_image: ImageBuffer<Luma<u16>, Vec<u16>>,
-    pub points: Vec<(T, T)>,
+    pub points: Box<dyn Iterator<Item = (T, T)>>,
 }
 
-/// Function to generate an array of points based on the Sobel filter applied to an image.
+/// Function to generate an iterator of points based on the Sobel filter applied to an image.
 ///
 /// # Arguments
 /// * `image` - A reference to a DynamicImage that represents the input image.
@@ -19,10 +19,10 @@ pub struct SobelResult<T> {
 /// * `T` - The numeric type for point coordinates. Can be integers (signed/unsigned) or floats.
 ///
 /// # Returns
-/// * `SobelResult<T>` - Contains the Sobel gradient image and sampled points of interest.
+/// * `SobelResult<T>` - Contains the Sobel gradient image and an iterator of sampled points of interest.
 pub fn generate_points_from_sobel<T>(image: &DynamicImage, num_points: u32) -> SobelResult<T>
 where
-    T: NumCast + Copy,
+    T: NumCast + Copy + 'static,
 {
     // Convert the image to grayscale
     let grayscale: GrayImage = image.to_luma8();
@@ -51,33 +51,32 @@ where
     let mut rng = thread_rng();
     points.shuffle(&mut rng);
 
-    let sampled_points = points
-        .into_iter()
-        .take(num_points.try_into().unwrap())
-        .collect();
+    let points_iter = points.into_iter().take(num_points.try_into().unwrap());
 
     SobelResult {
         sobel_image: sobel_gradient,
-        points: sampled_points,
+        points: Box::new(points_iter),
     }
 }
 
-/// Generate `num_points` random points within the given dimensions.
+/// Generate an iterator of `num_points` random points within the given dimensions.
 /// # Arguments
 /// * `width` - The width of the image.
 /// * `height` - The height of the image.
 /// * `num_points` - The number of random points to generate.
-pub fn generate_random_points<T>(width: u32, height: u32, num_points: u32) -> Vec<(T, T)>
+pub fn generate_random_points<T>(
+    width: u32,
+    height: u32,
+    num_points: u32,
+) -> impl Iterator<Item = (T, T)>
 where
-    T: NumCast + Copy,
+    T: NumCast + Copy + 'static,
 {
     let mut rng = thread_rng();
-    (0..num_points)
-        .map(|_| {
-            (
-                T::from(rng.gen_range(0..width)).unwrap(),
-                T::from(rng.gen_range(0..height)).unwrap(),
-            )
-        })
-        .collect()
+    (0..num_points).map(move |_| {
+        (
+            T::from(rng.gen_range(0..width)).unwrap(),
+            T::from(rng.gen_range(0..height)).unwrap(),
+        )
+    })
 }

@@ -1,54 +1,51 @@
 use std::cmp::{max, min};
 
 use image::GenericImageView;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 /// Returns, for each triangle, a list of the pixels that lie within it.
 ///
 /// Ensures that even if the triangle's bounding box or coverage
 /// produces no enclosed pixels, the triangle will contribute exactly one pixel
 /// (from its centroid).
-pub fn pixels_in_triangles<I>(triangles: &Vec<[(f32, f32); 3]>, image: &I) -> Vec<Vec<I::Pixel>>
+pub fn pixels_in_triangles<'a, I, T>(
+    triangles: T,
+    image: &'a I,
+) -> impl Iterator<Item = Vec<I::Pixel>> + 'a
 where
-    I: GenericImageView + Sync,
-    I::Pixel: Send,
+    I: GenericImageView,
+    T: IntoIterator<Item = [(f32, f32); 3]> + 'a,
 {
     let (width, height) = image.dimensions();
 
-    // Parallel iteration over triangles
-    triangles
-        .par_iter()
-        .map(|&triangle| {
-            let [(x1, y1), (x2, y2), (x3, y3)] = triangle;
-            let (min_x, max_x, min_y, max_y) =
-                bounding_box_i32(x1, y1, x2, y2, x3, y3, width, height);
-            let mut pixels = Vec::new();
+    triangles.into_iter().map(move |triangle| {
+        let [(x1, y1), (x2, y2), (x3, y3)] = triangle;
+        let (min_x, max_x, min_y, max_y) = bounding_box_i32(x1, y1, x2, y2, x3, y3, width, height);
+        let mut pixels = Vec::with_capacity((max_x - min_x + 1) as usize);
 
-            // Keep the pixel scanning loop sequential per triangle
-            for py in min_y..=max_y {
-                for px in min_x..=max_x {
-                    let px_center = px as f32 + 0.5;
-                    let py_center = py as f32 + 0.5;
-                    if point_in_triangle(px_center, py_center, (x1, y1), (x2, y2), (x3, y3)) {
-                        let pixel = image.get_pixel(px as u32, py as u32);
-                        pixels.push(pixel);
-                    }
+        // Keep the pixel scanning loop sequential per triangle
+        for py in min_y..=max_y {
+            for px in min_x..=max_x {
+                let px_center = px as f32 + 0.5;
+                let py_center = py as f32 + 0.5;
+                if point_in_triangle(px_center, py_center, (x1, y1), (x2, y2), (x3, y3)) {
+                    let pixel = image.get_pixel(px as u32, py as u32);
+                    pixels.push(pixel);
                 }
             }
+        }
 
-            // Ensure at least one pixel is returned for each triangle
-            if pixels.is_empty() {
-                // Fallback: sample from triangle's centroid
-                let cx = ((x1 + x2 + x3) / 3.0).round();
-                let cy = ((y1 + y2 + y3) / 3.0).round();
-                let cx_clamped = clamp_to_bounds(cx as i32, 0, width as i32 - 1) as u32;
-                let cy_clamped = clamp_to_bounds(cy as i32, 0, height as i32 - 1) as u32;
-                pixels.push(image.get_pixel(cx_clamped, cy_clamped));
-            }
+        // Ensure at least one pixel is returned for each triangle
+        if pixels.is_empty() {
+            // Fallback: sample from triangle's centroid
+            let cx = ((x1 + x2 + x3) / 3.0).round();
+            let cy = ((y1 + y2 + y3) / 3.0).round();
+            let cx_clamped = clamp_to_bounds(cx as i32, 0, width as i32 - 1) as u32;
+            let cy_clamped = clamp_to_bounds(cy as i32, 0, height as i32 - 1) as u32;
+            pixels.push(image.get_pixel(cx_clamped, cy_clamped));
+        }
 
-            pixels
-        })
-        .collect()
+        pixels
+    })
 }
 
 /// Check if a point (px, py) lies within the triangle formed by (x1,y1), (x2,y2), (x3,y3)
