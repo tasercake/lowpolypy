@@ -1,13 +1,12 @@
 use num_traits::NumCast;
+use rayon::prelude::*;
 use spade::{DelaunayTriangulation, Point2, SpadeNum, Triangulation};
 
-/// Returns an iterator over triangles, where each triangle is represented by
+/// Returns a vector of triangles, where each triangle is represented by
 /// three `(f64, f64)` coordinates.
-pub fn get_delaunay_polygons<T>(
-    points: impl IntoIterator<Item = (T, T)>,
-) -> impl Iterator<Item = [(T, T); 3]>
+pub fn get_delaunay_polygons<T>(points: impl IntoIterator<Item = (T, T)>) -> Vec<[(T, T); 3]>
 where
-    T: NumCast + Copy + SpadeNum + 'static,
+    T: NumCast + SpadeNum + Send + Sync,
 {
     // Build a DelaunayTriangulation with floating-point coordinates
     let mut delaunay = DelaunayTriangulation::<Point2<T>>::new();
@@ -20,11 +19,14 @@ where
         ));
     }
 
-    // Map inner faces directly to triangles
-    delaunay.inner_faces().map(|face| {
-        let v0 = face.vertices()[0].position();
-        let v1 = face.vertices()[1].position();
-        let v2 = face.vertices()[2].position();
-        [(v0.x, v0.y), (v1.x, v1.y), (v2.x, v2.y)]
-    })
+    delaunay
+        .inner_faces()
+        .par_bridge()
+        .map(|face| {
+            let v0 = face.vertices()[0].position();
+            let v1 = face.vertices()[1].position();
+            let v2 = face.vertices()[2].position();
+            [(v0.x, v0.y), (v1.x, v1.y), (v2.x, v2.y)]
+        })
+        .collect()
 }

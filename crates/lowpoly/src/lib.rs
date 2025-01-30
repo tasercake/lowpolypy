@@ -18,7 +18,7 @@ use num_traits::{Num, NumCast};
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
-use rayon::iter::ParallelIterator;
+use rayon::prelude::*;
 
 /// Return struct for the `to_lowpoly` function.
 /// # Fields
@@ -26,10 +26,10 @@ use rayon::iter::ParallelIterator;
 /// * `points` - The anchor points sampled from the image.
 /// * `polygons` - The Delaunay triangulation polygons.
 /// * `lowpoly` - The low-poly version of the image.
-pub struct LowPolyResult<T: Num, P: Iterator<Item = (T, T)>, Poly: Iterator<Item = [(T, T); 3]>> {
+pub struct LowPolyResult<T: Num> {
     pub original_image: DynamicImage,
-    pub points: P,
-    pub polygons: Poly,
+    pub points: Vec<(T, T)>,
+    pub polygons: Vec<[(T, T); 3]>,
     pub debug_images: Vec<DynamicImage>,
     pub lowpoly_image: RgbaImage,
 }
@@ -46,10 +46,7 @@ pub fn to_lowpoly(
     num_points: Option<u32>,
     num_random_points: Option<u32>,
     output_size: u32,
-) -> Result<
-    LowPolyResult<f32, impl Iterator<Item = (f32, f32)>, impl Iterator<Item = [(f32, f32); 3]>>,
-    Box<dyn std::error::Error>,
-> {
+) -> Result<LowPolyResult<f32>, Box<dyn std::error::Error>> {
     // Check if it's "empty" (in the sense of zero dimensions):
     if image.width() == 0 || image.height() == 0 {
         error!("Error: The loaded image has zero width or height.");
@@ -59,7 +56,7 @@ pub fn to_lowpoly(
     // Generate anchor points from the image
     let SobelResult {
         sobel_image,
-        mut points,
+        points,
     } = generate_points_from_sobel::<f32>(&image, num_points.unwrap_or(1000));
     // Generate a few more random points around the image
     let random_points = generate_random_points(
@@ -69,32 +66,40 @@ pub fn to_lowpoly(
     );
     let (width, height) = (image.width() as f32, image.height() as f32);
     // Chain all iterators together
-    let points = points.chain(random_points).chain(
+    let points = points.chain(random_points.into_par_iter()).chain(
         vec![
             (0.0, 0.0),
             (width - 1.0, 0.0),
             (0.0, height - 1.0),
             (width - 1.0, height - 1.0),
         ]
-        .into_iter(),
+        .into_par_iter(),
     );
+
+    let points_vec: Vec<(f32, f32)> = points.collect();
+    let polygons = get_delaunay_polygons(points_vec.clone());
 
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
     let mut debug_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
     let mut lowpoly_image_buffer = RgbaImage::from_pixel(width, height, Rgba([0, 0, 0, 0]));
 
-    draw_points(&mut debug_image_buffer, points.copied());
-
-    let polygons = get_delaunay_polygons(points.clone());
+    draw_points(&mut debug_image_buffer, points_vec.clone());
 
     // Compute the fill color for each polygon
-    let pixels_per_polygon = pixels_in_triangles(polygons, &image);
+    let polygons_clone = polygons.clone();
+    let pixels_per_polygon = pixels_in_triangles(polygons_clone, &image);
     // For each polygon, compute the average color of the pixels within it
     let polygon_colors = pixels_per_polygon.map(|pixels| find_dominant_color_median_cut(&pixels));
-    draw_polygons_filled(&mut lowpoly_image_buffer, polygons, polygon_colors);
+    let polygons_clone_for_fill = polygons.clone();
+    draw_polygons_filled(
+        &mut lowpoly_image_buffer,
+        polygons_clone_for_fill,
+        polygon_colors,
+    );
 
-    draw_polygon_edges(&mut debug_image_buffer, polygons);
+    let polygons_clone_for_edges = polygons.clone();
+    draw_polygon_edges(&mut debug_image_buffer, polygons_clone_for_edges);
 
     // Resize to `output_size` but preserve aspect ratio.
     // `output_size` constrains the longest side of the generated image.
@@ -120,8 +125,8 @@ pub fn to_lowpoly(
     info!("Done.");
     Ok(LowPolyResult {
         original_image: image,
-        points,
-        polygons,
+        points: points_vec,
+        polygons: polygons.clone(),
         debug_images: vec![
             DynamicImage::ImageRgb8(debug_image_buffer),
             DynamicImage::ImageLuma16(sobel_image),
