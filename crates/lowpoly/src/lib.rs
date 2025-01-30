@@ -39,12 +39,14 @@ pub struct LowPolyResult<T: Num> {
 /// # Arguments
 /// * `image` - The source image to generate a low-poly version of.
 /// * `num_points` - The number of anchor points to sample from the image. Default is 1000.
-/// * `num_random_points` - The number of random points to generate. Default is 100.
+/// * `sharpness` - The emphasis placed on edges in the images. Higher values make the edges more prominent. Default is 2.2.
+/// * `num_random_points` - The number of random points to generate.
 /// * `output_size` - The size (longest side) of the final output image.
 pub fn to_lowpoly(
     image: DynamicImage,
-    num_points: Option<u32>,
-    num_random_points: Option<u32>,
+    num_points: u32,
+    sharpness: f32,
+    num_random_points: u32,
     output_size: u32,
 ) -> Result<LowPolyResult<f32>, Box<dyn std::error::Error>> {
     // Check if it's "empty" (in the sense of zero dimensions):
@@ -57,13 +59,9 @@ pub fn to_lowpoly(
     let SobelResult {
         sobel_image,
         points,
-    } = generate_points_from_sobel::<f32>(&image, num_points.unwrap_or(1000));
+    } = generate_points_from_sobel::<f32>(&image, num_points, sharpness);
     // Generate a few more random points around the image
-    let random_points = generate_random_points(
-        image.width(),
-        image.height(),
-        num_random_points.unwrap_or(100),
-    );
+    let random_points = generate_random_points(image.width(), image.height(), num_random_points);
     let (width, height) = (image.width() as f32, image.height() as f32);
     // Chain all iterators together
     let points = points.chain(random_points.into_par_iter()).chain(

@@ -11,11 +11,12 @@ pub struct SobelResult<P> {
     pub points: P,
 }
 
-/// Function to generate an iterator of points based on the Sobel filter applied to an image.
+/// Generate points based on the Sobel filter applied to an image.
 ///
 /// # Arguments
 /// * `image` - A reference to a DynamicImage that represents the input image.
 /// * `num_points` - The number of points to sample randomly from the Sobel gradient image.
+/// * `sharpness` - The sharpness of the Sobel gradient. Default is 1.0 for linear. >1.0 is more focused on edges. <1.0 is more random.
 ///
 /// # Type Parameters
 /// * `T` - The numeric type for point coordinates. Can be integers (signed/unsigned) or floats.
@@ -25,6 +26,7 @@ pub struct SobelResult<P> {
 pub fn generate_points_from_sobel<T>(
     image: &DynamicImage,
     num_points: u32,
+    sharpness: f32,
 ) -> SobelResult<impl ParallelIterator<Item = (T, T)>>
 where
     T: NumCast + Send,
@@ -37,9 +39,25 @@ where
     // Apply the Sobel filter to detect edges
     let sobel_gradient: ImageBuffer<Luma<u16>, Vec<u16>> = sobel_gradients(&grayscale);
 
-    let pixel_weights: Vec<u32> = sobel_gradient.par_pixels().map(|p| p[0] as u32).collect();
+    // Raise each pixel's Sobel magnitude to `sharpness` power
+    let pixel_weights: Vec<f32> = sobel_gradient
+        .par_pixels()
+        .map(|p| {
+            let mag = p[0] as f32;
+            mag.powf(sharpness)
+        })
+        .collect();
+    // Normalize the weights to the range [0, 1]
+    let max_weight = pixel_weights
+        .par_iter()
+        .max_by(|a, b| a.total_cmp(b))
+        .unwrap();
+    let pixel_weights: Vec<f32> = pixel_weights.par_iter().map(|w| w / max_weight).collect();
 
-    let dist = WeightedIndex::new(&pixel_weights).unwrap();
+    // Create a weighted distribution using the adjusted magnitudes.
+    let dist = WeightedIndex::new(&pixel_weights)
+        .expect("WeightedIndex failed: all weights were zero or invalid.");
+
     let points = (0..num_points).into_par_iter().map_init(
         || thread_rng(),
         move |rng, _| {
