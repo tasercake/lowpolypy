@@ -18,6 +18,7 @@ use num_traits::{Num, NumCast};
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 /// Return struct for the `to_lowpoly` function.
 /// # Fields
@@ -99,7 +100,7 @@ pub fn to_lowpoly(
     let pixels_per_polygon = pixels_in_triangles(&polygons, image);
     // For each polygon, compute the average color of the pixels within it
     let polygon_colors = pixels_per_polygon
-        .into_iter()
+        .into_par_iter()
         .map(|pixels| find_dominant_color_median_cut(&pixels))
         .collect();
     draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, &polygon_colors);
