@@ -22,12 +22,12 @@ pub struct SobelResult<P> {
 /// * `T` - The numeric type for point coordinates. Can be integers (signed/unsigned) or floats.
 ///
 /// # Returns
-/// * `SobelResult<T, impl ParallelIterator<Item = (T, T)>>` - Contains the Sobel gradient image and an iterator of sampled points of interest.
+/// * `SobelResult<Vec<(T, T)>>` - Contains the Sobel gradient image and a vector of sampled points of interest.
 pub fn generate_points_from_sobel<T>(
     image: &DynamicImage,
     num_points: u32,
     sharpness: f32,
-) -> SobelResult<impl ParallelIterator<Item = (T, T)>>
+) -> SobelResult<Vec<(T, T)>>
 where
     T: NumCast + Send,
 {
@@ -37,22 +37,16 @@ where
     let grayscale: GrayImage = image.to_luma8();
 
     // Apply the Sobel filter to detect edges
-    let sobel_gradient: ImageBuffer<Luma<u16>, Vec<u16>> = sobel_gradients(&grayscale);
+    let sobel_image: ImageBuffer<Luma<u16>, Vec<u16>> = sobel_gradients(&grayscale);
 
     // Raise each pixel's Sobel magnitude to `sharpness` power
-    let pixel_weights: Vec<f32> = sobel_gradient
-        .par_pixels()
-        .map(|p| {
-            let mag = p[0] as f32;
-            mag.powf(sharpness)
-        })
-        .collect();
+    let pixel_weights = sobel_image.par_pixels().map(|p| {
+        let mag = p[0] as f32;
+        mag.powf(sharpness)
+    });
     // Normalize the weights to the range [0, 1]
-    let max_weight = pixel_weights
-        .par_iter()
-        .max_by(|a, b| a.total_cmp(b))
-        .unwrap();
-    let pixel_weights: Vec<f32> = pixel_weights.par_iter().map(|w| w / max_weight).collect();
+    let max_weight = pixel_weights.clone().max_by(|a, b| a.total_cmp(b)).unwrap();
+    let pixel_weights: Vec<f32> = pixel_weights.map(|w| w / max_weight).collect();
 
     // Create a weighted distribution using the adjusted magnitudes.
     let dist = WeightedIndex::new(&pixel_weights)
@@ -69,8 +63,8 @@ where
     );
 
     SobelResult {
-        sobel_image: sobel_gradient,
-        points,
+        sobel_image,
+        points: points.collect(),
     }
 }
 
@@ -79,21 +73,20 @@ where
 /// * `width` - The width of the image.
 /// * `height` - The height of the image.
 /// * `num_points` - The number of random points to generate.
-pub fn generate_random_points<T>(
-    width: u32,
-    height: u32,
-    num_points: u32,
-) -> impl ParallelIterator<Item = (T, T)>
+pub fn generate_random_points<T>(width: u32, height: u32, num_points: u32) -> Vec<(T, T)>
 where
     T: NumCast + Send,
 {
-    (0..num_points).into_par_iter().map_init(
-        || thread_rng(),
-        move |rng, _| {
-            (
-                T::from(rng.gen_range(0..width)).unwrap(),
-                T::from(rng.gen_range(0..height)).unwrap(),
-            )
-        },
-    )
+    (0..num_points)
+        .into_par_iter()
+        .map_init(
+            || thread_rng(),
+            move |rng, _| {
+                (
+                    T::from(rng.gen_range(0..width)).unwrap(),
+                    T::from(rng.gen_range(0..height)).unwrap(),
+                )
+            },
+        )
+        .collect()
 }

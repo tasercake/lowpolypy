@@ -79,7 +79,7 @@ pub fn to_lowpoly(
         .collect();
 
     // Remove the points_vec collection and pass iterator directly
-    let polygons = get_delaunay_polygons(points.clone());
+    let polygons = get_delaunay_polygons(&points);
 
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
@@ -92,25 +92,21 @@ pub fn to_lowpoly(
 
     // For drawing, use the original points iterator
     match &mut debug_image_buffer {
-        Some(buffer) => draw_points(buffer, points.clone()), // Use original iterator
+        Some(buffer) => draw_points(buffer, &points),
         None => (),
     }
 
     // Compute the fill color for each polygon
-    let pixels_per_polygon = pixels_in_triangles(polygons.clone(), &image);
+    let pixels_per_polygon = pixels_in_triangles(&polygons, &image);
     // For each polygon, compute the average color of the pixels within it
     let polygon_colors = pixels_per_polygon
         .into_iter()
-        .map(|pixels| find_dominant_color_median_cut(&pixels));
-    let polygons_clone_for_fill = polygons.clone();
-    draw_polygons_filled(
-        &mut lowpoly_image_buffer,
-        polygons_clone_for_fill,
-        polygon_colors,
-    );
+        .map(|pixels| find_dominant_color_median_cut(&pixels))
+        .collect();
+    draw_polygons_filled(&mut lowpoly_image_buffer, &polygons, &polygon_colors);
 
     match &mut debug_image_buffer {
-        Some(buffer) => draw_polygon_edges(buffer, polygons.clone()),
+        Some(buffer) => draw_polygon_edges(buffer, &polygons),
         None => (),
     }
 
@@ -138,11 +134,11 @@ pub fn to_lowpoly(
     info!("Done.");
     Ok(LowPolyResult {
         original_image: image,
-        points: points.clone(),
-        polygons: polygons.clone(),
+        points: points,
+        polygons: polygons,
         debug_images: vec![
-            match &debug_image_buffer {
-                Some(buffer) => Some(DynamicImage::ImageRgb8(buffer.clone())),
+            match debug_image_buffer {
+                Some(buffer) => Some(DynamicImage::ImageRgb8(buffer)),
                 None => None,
             },
             Some(DynamicImage::ImageLuma16(sobel_image)),
@@ -151,10 +147,9 @@ pub fn to_lowpoly(
     })
 }
 
-fn draw_points<T, P>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: P)
+fn draw_points<T>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: &Vec<(T, T)>)
 where
     T: NumCast + Copy,
-    P: IntoIterator<Item = (T, T)>, // Accept owned tuples now
 {
     points.into_iter().for_each(|(x, y)| {
         draw_filled_circle_mut(
@@ -166,10 +161,9 @@ where
     });
 }
 
-fn draw_polygon_edges<T, P>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: P)
+fn draw_polygon_edges<T>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: &Vec<[(T, T); 3]>)
 where
     T: NumCast + Copy,
-    P: IntoIterator<Item = [(T, T); 3]>,
 {
     for polygon in polygons {
         let (p1, p2, p3) = (polygon[0], polygon[1], polygon[2]);
@@ -205,19 +199,21 @@ where
 ///   the fill color for each polygon.
 ///
 /// The i32 cast in the points is necessary because `draw_filled_polygon_mut` expects integer pixel coordinates.
-fn draw_polygons_filled<P, C>(image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>, polygons: P, colors: C)
-where
-    P: IntoIterator<Item = [(f32, f32); 3]>,
-    C: IntoIterator<Item = Rgba<u8>>,
-{
-    // Consider using Iterator::zip directly instead of zipping in the loop
-    for (polygon, color) in polygons.into_iter().zip(colors) {
-        // Convert to Point<i32> using map() which preserves iterator efficiency
-        let pts = polygon.iter().map(|&(x, y)| Point::new(x as i32, y as i32));
-
-        // Collecting into Vec is necessary for the polygon drawing API
-        let pts: Vec<Point<i32>> = pts.collect();
-
-        draw_antialiased_polygon_mut(image, &pts, color, interpolate);
-    }
+fn draw_polygons_filled(
+    image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+    polygons: &Vec<[(f32, f32); 3]>,
+    colors: &Vec<Rgba<u8>>,
+) {
+    // Zip the polygons together with their respective colors.
+    polygons
+        .into_iter()
+        .zip(colors)
+        .for_each(|(polygon, color)| {
+            // Convert each (f64,f64) into an `imageproc::point::Point<i32>`.
+            let pts: Vec<Point<i32>> = polygon
+                .iter()
+                .map(|&(x, y)| Point::new(x as i32, y as i32))
+                .collect();
+            draw_antialiased_polygon_mut(image, &pts, *color, interpolate);
+        });
 }

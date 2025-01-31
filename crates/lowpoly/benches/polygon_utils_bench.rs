@@ -18,7 +18,7 @@ fn bench_pixels_in_triangles(c: &mut Criterion) {
     c.bench_function("pixels_in_triangles", |b| {
         b.iter(|| {
             let _: Vec<Vec<Rgba<u8>>> =
-                pixels_in_triangles(black_box(polygons_small.clone()), black_box(&img)).collect();
+                pixels_in_triangles(black_box(&polygons_small), black_box(&img));
         });
     });
 
@@ -41,7 +41,7 @@ fn bench_pixels_in_triangles(c: &mut Criterion) {
     c.bench_function("pixels_in_triangles_large", |b| {
         b.iter(|| {
             let _: Vec<Vec<Rgba<u8>>> =
-                pixels_in_triangles(black_box(polygons_large.clone()), black_box(&img)).collect();
+                pixels_in_triangles(black_box(&polygons_large), black_box(&img));
         });
     });
 }
