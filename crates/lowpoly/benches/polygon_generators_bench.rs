@@ -19,7 +19,7 @@ fn bench_get_delaunay_polygons(c: &mut Criterion) {
 
     c.bench_function("get_delaunay_polygons", |b| {
         b.iter(|| {
-            let _ = get_delaunay_polygons(black_box(points.clone()));
+            let _ = get_delaunay_polygons(black_box(&points));
         });
     });
 
@@ -34,7 +34,7 @@ fn bench_get_delaunay_polygons(c: &mut Criterion) {
         .collect();
     c.bench_function("get_delaunay_polygons", |b| {
         b.iter(|| {
-            let _ = get_delaunay_polygons(black_box(points_large.clone()));
+            let _ = get_delaunay_polygons(black_box(&points_large));
         });
     });
 }

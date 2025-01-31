@@ -27,7 +27,6 @@ use polygon_utils::pixels_in_triangles;
 /// * `debug_images` - Intermediate images for debugging. Only returned if `debug` is true.
 /// * `lowpoly` - The low-poly version of the image.
 pub struct LowPolyResult<T: Num> {
-    pub original_image: DynamicImage,
     pub points: Vec<(T, T)>,
     pub polygons: Vec<[(T, T); 3]>,
     pub debug_images: Vec<Option<DynamicImage>>,
@@ -44,7 +43,7 @@ pub struct LowPolyResult<T: Num> {
 /// * `output_size` - The size (longest side) of the final output image.
 /// * `debug` - Whether to draw and return intermediate images for debugging.
 pub fn to_lowpoly(
-    image: DynamicImage,
+    image: &DynamicImage,
     num_points: u32,
     sharpness: f32,
     num_random_points: u32,
@@ -97,7 +96,7 @@ pub fn to_lowpoly(
     }
 
     // Compute the fill color for each polygon
-    let pixels_per_polygon = pixels_in_triangles(&polygons, &image);
+    let pixels_per_polygon = pixels_in_triangles(&polygons, image);
     // For each polygon, compute the average color of the pixels within it
     let polygon_colors = pixels_per_polygon
         .into_iter()
@@ -133,7 +132,6 @@ pub fn to_lowpoly(
 
     info!("Done.");
     Ok(LowPolyResult {
-        original_image: image,
         points: points,
         polygons: polygons,
         debug_images: vec![

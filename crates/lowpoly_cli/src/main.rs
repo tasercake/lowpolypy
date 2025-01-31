@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Run the lowpoly transformation
     let result = to_lowpoly(
-        image,
+        &image,
         num_points,
         sharpness,
         num_random_points,
