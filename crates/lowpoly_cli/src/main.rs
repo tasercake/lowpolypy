@@ -39,6 +39,10 @@ pub struct Cli {
     /// Final output size in pixels.
     #[arg(long, default_value_t = 2560)]
     pub output_size: u32,
+
+    /// Draw and save debug images
+    #[arg(long, default_value_t = false)]
+    pub debug: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -53,6 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sharpness = cli.edge_focus;
     let num_random_points = cli.num_random_points;
     let output_size = cli.output_size;
+    let debug = cli.debug;
 
     // Validate & expand paths
     let source = validate_image_source(&source)?;
@@ -73,11 +78,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to read image {}: {}", source.display(), e))?;
 
     // Run the lowpoly transformation
-    let result =
-        to_lowpoly(image, num_points, sharpness, num_random_points, output_size).map_err(|e| {
-            eprintln!("{}", e);
-            std::process::exit(1);
-        });
+    let result = to_lowpoly(
+        image,
+        num_points,
+        sharpness,
+        num_random_points,
+        output_size,
+        debug,
+    )
+    .map_err(|e| {
+        eprintln!("{}", e);
+        std::process::exit(1);
+    });
 
     // Save the output
     info!("Writing output to: {}", output_path.display());
@@ -90,7 +102,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Save the debug images with suffix "_debug{index}"
     for (i, debug_image) in result.as_ref().unwrap().debug_images.iter().enumerate() {
         let debug_path = destination_dir.join(format!("{}_debug{}.png", source_stem, i));
-        debug_image.save_with_format(&debug_path, ImageFormat::Png)?;
+        if let Some(debug_image) = debug_image {
+            debug_image.save_with_format(&debug_path, ImageFormat::Png)?;
+        }
     }
 
     Ok(())

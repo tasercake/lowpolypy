@@ -18,19 +18,19 @@ use num_traits::{Num, NumCast};
 use point_generators::{generate_points_from_sobel, generate_random_points, SobelResult};
 use polygon_generators::get_delaunay_polygons;
 use polygon_utils::pixels_in_triangles;
-use rayon::prelude::*;
 
 /// Return struct for the `to_lowpoly` function.
 /// # Fields
 /// * `original` - The original image.
 /// * `points` - The anchor points sampled from the image.
 /// * `polygons` - The Delaunay triangulation polygons.
+/// * `debug_images` - Intermediate images for debugging. Only returned if `debug` is true.
 /// * `lowpoly` - The low-poly version of the image.
 pub struct LowPolyResult<T: Num> {
     pub original_image: DynamicImage,
     pub points: Vec<(T, T)>,
     pub polygons: Vec<[(T, T); 3]>,
-    pub debug_images: Vec<DynamicImage>,
+    pub debug_images: Vec<Option<DynamicImage>>,
     pub lowpoly_image: RgbaImage,
 }
 
@@ -42,12 +42,14 @@ pub struct LowPolyResult<T: Num> {
 /// * `sharpness` - The emphasis placed on edges in the images. Higher values make the edges more prominent. Default is 2.2.
 /// * `num_random_points` - The number of random points to generate.
 /// * `output_size` - The size (longest side) of the final output image.
+/// * `debug` - Whether to draw and return intermediate images for debugging.
 pub fn to_lowpoly(
     image: DynamicImage,
     num_points: u32,
     sharpness: f32,
     num_random_points: u32,
     output_size: u32,
+    debug: bool,
 ) -> Result<LowPolyResult<f32>, Box<dyn std::error::Error>> {
     // Check if it's "empty" (in the sense of zero dimensions):
     if image.width() == 0 || image.height() == 0 {
@@ -61,34 +63,45 @@ pub fn to_lowpoly(
         points,
     } = generate_points_from_sobel::<f32>(&image, num_points, sharpness);
     // Generate a few more random points around the image
-    let random_points = generate_random_points(image.width(), image.height(), num_random_points);
+    let random_points =
+        generate_random_points::<f32>(image.width(), image.height(), num_random_points);
     let (width, height) = (image.width() as f32, image.height() as f32);
-    // Chain all iterators together
-    let points = points.chain(random_points.into_par_iter()).chain(
-        vec![
-            (0.0, 0.0),
-            (width - 1.0, 0.0),
-            (0.0, height - 1.0),
-            (width - 1.0, height - 1.0),
-        ]
-        .into_par_iter(),
-    );
+    let corner_points = vec![
+        (0.0, 0.0),
+        (width - 1.0, 0.0),
+        (0.0, height - 1.0),
+        (width - 1.0, height - 1.0),
+    ];
+    let points: Vec<(f32, f32)> = points
+        .into_iter()
+        .chain(corner_points.into_iter())
+        .chain(random_points.into_iter())
+        .collect();
 
-    let points_vec: Vec<(f32, f32)> = points.collect();
-    let polygons = get_delaunay_polygons(points_vec.clone());
+    // Remove the points_vec collection and pass iterator directly
+    let polygons = get_delaunay_polygons(points.clone());
 
     // Create a new target image to draw the low-poly version on
     let (width, height) = image.dimensions();
-    let mut debug_image_buffer = RgbImage::from_pixel(width, height, Rgb([0, 0, 0]));
+    let mut debug_image_buffer = if debug {
+        Some(RgbImage::from_pixel(width, height, Rgb([0, 0, 0])))
+    } else {
+        None
+    };
     let mut lowpoly_image_buffer = RgbaImage::from_pixel(width, height, Rgba([0, 0, 0, 0]));
 
-    draw_points(&mut debug_image_buffer, points_vec.clone());
+    // For drawing, use the original points iterator
+    match &mut debug_image_buffer {
+        Some(buffer) => draw_points(buffer, points.clone()), // Use original iterator
+        None => (),
+    }
 
     // Compute the fill color for each polygon
-    let polygons_clone = polygons.clone();
-    let pixels_per_polygon = pixels_in_triangles(polygons_clone, &image);
+    let pixels_per_polygon = pixels_in_triangles(polygons.clone(), &image);
     // For each polygon, compute the average color of the pixels within it
-    let polygon_colors = pixels_per_polygon.map(|pixels| find_dominant_color_median_cut(&pixels));
+    let polygon_colors = pixels_per_polygon
+        .into_iter()
+        .map(|pixels| find_dominant_color_median_cut(&pixels));
     let polygons_clone_for_fill = polygons.clone();
     draw_polygons_filled(
         &mut lowpoly_image_buffer,
@@ -96,8 +109,10 @@ pub fn to_lowpoly(
         polygon_colors,
     );
 
-    let polygons_clone_for_edges = polygons.clone();
-    draw_polygon_edges(&mut debug_image_buffer, polygons_clone_for_edges);
+    match &mut debug_image_buffer {
+        Some(buffer) => draw_polygon_edges(buffer, polygons.clone()),
+        None => (),
+    }
 
     // Resize to `output_size` but preserve aspect ratio.
     // `output_size` constrains the longest side of the generated image.
@@ -123,11 +138,14 @@ pub fn to_lowpoly(
     info!("Done.");
     Ok(LowPolyResult {
         original_image: image,
-        points: points_vec,
+        points: points.clone(),
         polygons: polygons.clone(),
         debug_images: vec![
-            DynamicImage::ImageRgb8(debug_image_buffer),
-            DynamicImage::ImageLuma16(sobel_image),
+            match &debug_image_buffer {
+                Some(buffer) => Some(DynamicImage::ImageRgb8(buffer.clone())),
+                None => None,
+            },
+            Some(DynamicImage::ImageLuma16(sobel_image)),
         ],
         lowpoly_image: resized,
     })
@@ -135,18 +153,19 @@ pub fn to_lowpoly(
 
 fn draw_points<T, P>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, points: P)
 where
-    T: NumCast,
-    P: IntoIterator<Item = (T, T)>,
+    T: NumCast + Copy,
+    P: IntoIterator<Item = (T, T)>, // Accept owned tuples now
 {
-    for point in points {
+    points.into_iter().for_each(|(x, y)| {
         draw_filled_circle_mut(
             image,
-            (point.0.to_i32().unwrap(), point.1.to_i32().unwrap()),
+            (x.to_i32().unwrap(), y.to_i32().unwrap()),
             8,
             Rgb([255, 0, 0]),
         );
-    }
+    });
 }
+
 fn draw_polygon_edges<T, P>(image: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, polygons: P)
 where
     T: NumCast + Copy,
