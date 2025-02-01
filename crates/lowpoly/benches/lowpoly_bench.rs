@@ -13,7 +13,7 @@ fn bench_to_lowpoly(c: &mut Criterion) {
     config.sample_size(10);
     config.bench_function("to_lowpoly", |b| {
         b.iter_with_large_drop(|| {
-            let _result = to_lowpoly(image.clone(), Some(2500), Some(1500), width.max(height))
+            let _result = to_lowpoly(&image, 2500, 2.2, 1500, width.max(height), false)
                 .expect("Failed to generate low-poly image");
         });
     });

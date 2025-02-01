@@ -17,12 +17,13 @@ fn bench_pixels_in_triangles(c: &mut Criterion) {
 
     c.bench_function("pixels_in_triangles", |b| {
         b.iter(|| {
-            let _ = pixels_in_triangles(black_box(&polygons_small), black_box(&img));
+            let _: Vec<Vec<Rgba<u8>>> =
+                pixels_in_triangles(black_box(&polygons_small), black_box(&img));
         });
     });
 
     // Test with a larger set of 1000 deterministic triangles of varying (but deterministic) sizes:
-    let polygons_large = (0..1000)
+    let polygons_large: Vec<[(f32, f32); 3]> = (0..1000)
         .map(|i| {
             let size = (i % 100) + 1;
             let x = (i % 20) as f32 * 20.0;
@@ -39,7 +40,8 @@ fn bench_pixels_in_triangles(c: &mut Criterion) {
         .collect();
     c.bench_function("pixels_in_triangles_large", |b| {
         b.iter(|| {
-            let _ = pixels_in_triangles(black_box(&polygons_large), black_box(&img));
+            let _: Vec<Vec<Rgba<u8>>> =
+                pixels_in_triangles(black_box(&polygons_large), black_box(&img));
         });
     });
 }

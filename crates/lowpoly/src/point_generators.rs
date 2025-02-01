@@ -1,83 +1,92 @@
 use image::{DynamicImage, GrayImage, ImageBuffer, Luma};
 use imageproc::gradients::sobel_gradients;
-use log::debug;
 use num_traits::NumCast;
-use rand::{seq::SliceRandom, thread_rng, Rng};
+use rand::distributions::WeightedIndex;
+use rand::prelude::Distribution;
+use rand::{thread_rng, Rng};
+use rayon::prelude::*;
 
-pub struct SobelResult<T> {
+pub struct SobelResult<P> {
     pub sobel_image: ImageBuffer<Luma<u16>, Vec<u16>>,
-    pub points: Vec<(T, T)>,
+    pub points: P,
 }
 
-/// Function to generate an array of points based on the Sobel filter applied to an image.
+/// Generate points based on the Sobel filter applied to an image.
 ///
 /// # Arguments
 /// * `image` - A reference to a DynamicImage that represents the input image.
 /// * `num_points` - The number of points to sample randomly from the Sobel gradient image.
+/// * `sharpness` - The sharpness of the Sobel gradient. Default is 1.0 for linear. >1.0 is more focused on edges. <1.0 is more random.
 ///
 /// # Type Parameters
 /// * `T` - The numeric type for point coordinates. Can be integers (signed/unsigned) or floats.
 ///
 /// # Returns
-/// * `SobelResult<T>` - Contains the Sobel gradient image and sampled points of interest.
-pub fn generate_points_from_sobel<T>(image: &DynamicImage, num_points: u32) -> SobelResult<T>
+/// * `SobelResult<Vec<(T, T)>>` - Contains the Sobel gradient image and a vector of sampled points of interest.
+pub fn generate_points_from_sobel<T>(
+    image: &DynamicImage,
+    num_points: u32,
+    sharpness: f32,
+) -> SobelResult<Vec<(T, T)>>
 where
-    T: NumCast + Copy,
+    T: NumCast + Send,
 {
+    let width = image.width();
+
     // Convert the image to grayscale
     let grayscale: GrayImage = image.to_luma8();
 
     // Apply the Sobel filter to detect edges
-    let sobel_gradient: ImageBuffer<Luma<u16>, Vec<u16>> = sobel_gradients(&grayscale);
-    // Print the min & max values of the Sobel gradient image
-    let min = sobel_gradient.pixels().map(|p| p[0]).min().unwrap();
-    let max = sobel_gradient.pixels().map(|p| p[0]).max().unwrap();
-    debug!("Sobel gradient min: {}, max: {}", min, max);
+    let sobel_image: ImageBuffer<Luma<u16>, Vec<u16>> = sobel_gradients(&grayscale);
 
-    // Threshold to extract significant edge points
-    let threshold = 100; // This value can be tuned based on desired sensitivity
-    let mut points = Vec::new();
+    // Raise each pixel's Sobel magnitude to `sharpness` power
+    let pixel_weights = sobel_image.par_pixels().map(|p| {
+        let mag = p[0] as f32;
+        mag.powf(sharpness)
+    });
+    // Normalize the weights to the range [0, 1]
+    let max_weight = pixel_weights.clone().max_by(|a, b| a.total_cmp(b)).unwrap();
+    let pixel_weights: Vec<f32> = pixel_weights.map(|w| w / max_weight).collect();
 
-    for (x, y, pixel) in sobel_gradient.enumerate_pixels() {
-        if pixel[0] as u16 > threshold {
-            // Convert coordinates to target type T
-            if let (Some(tx), Some(ty)) = (T::from(x), T::from(y)) {
-                points.push((tx, ty));
-            }
-        }
-    }
+    // Create a weighted distribution using the adjusted magnitudes.
+    let dist = WeightedIndex::new(&pixel_weights)
+        .expect("WeightedIndex failed: all weights were zero or invalid.");
 
-    // Randomly sample `num_points` from the collected points
-    let mut rng = thread_rng();
-    points.shuffle(&mut rng);
-
-    let sampled_points = points
-        .into_iter()
-        .take(num_points.try_into().unwrap())
-        .collect();
+    let points = (0..num_points).into_par_iter().map_init(
+        || thread_rng(),
+        move |rng, _| {
+            let i = dist.sample(rng);
+            let x = i as u32 % width;
+            let y = i as u32 / width;
+            (T::from(x).unwrap(), T::from(y).unwrap())
+        },
+    );
 
     SobelResult {
-        sobel_image: sobel_gradient,
-        points: sampled_points,
+        sobel_image,
+        points: points.collect(),
     }
 }
 
-/// Generate `num_points` random points within the given dimensions.
+/// Generate an iterator of `num_points` random points within the given dimensions.
 /// # Arguments
 /// * `width` - The width of the image.
 /// * `height` - The height of the image.
 /// * `num_points` - The number of random points to generate.
 pub fn generate_random_points<T>(width: u32, height: u32, num_points: u32) -> Vec<(T, T)>
 where
-    T: NumCast + Copy,
+    T: NumCast + Send,
 {
-    let mut rng = thread_rng();
     (0..num_points)
-        .map(|_| {
-            (
-                T::from(rng.gen_range(0..width)).unwrap(),
-                T::from(rng.gen_range(0..height)).unwrap(),
-            )
-        })
+        .into_par_iter()
+        .map_init(
+            || thread_rng(),
+            move |rng, _| {
+                (
+                    T::from(rng.gen_range(0..width)).unwrap(),
+                    T::from(rng.gen_range(0..height)).unwrap(),
+                )
+            },
+        )
         .collect()
 }

@@ -21,7 +21,11 @@ fn bench_generate_points_from_sobel(c: &mut Criterion) {
 
     c.bench_function("generate_points_from_sobel", |b| {
         b.iter(|| {
-            let _res = generate_points_from_sobel::<u16>(black_box(&img), black_box(num_points));
+            let _res = generate_points_from_sobel::<u16>(
+                black_box(&img),
+                black_box(num_points),
+                black_box(2.2),
+            );
         })
     });
 }
@@ -29,8 +33,8 @@ fn bench_generate_points_from_sobel(c: &mut Criterion) {
 fn bench_generate_random_points(c: &mut Criterion) {
     c.bench_function("generate_random_points", |b| {
         b.iter(|| {
-            let _points =
-                generate_random_points::<f32>(black_box(1000), black_box(1000), black_box(500));
+            let _: Vec<(f32, f32)> =
+                generate_random_points(black_box(1000), black_box(1000), black_box(500));
         })
     });
 }

@@ -15,14 +15,13 @@ where
 {
     let (width, height) = image.dimensions();
 
-    // Parallel iteration over triangles
     triangles
         .par_iter()
         .map(|&triangle| {
             let [(x1, y1), (x2, y2), (x3, y3)] = triangle;
             let (min_x, max_x, min_y, max_y) =
                 bounding_box_i32(x1, y1, x2, y2, x3, y3, width, height);
-            let mut pixels = Vec::new();
+            let mut pixels = Vec::with_capacity((max_x - min_x + 1) as usize);
 
             // Keep the pixel scanning loop sequential per triangle
             for py in min_y..=max_y {
