@@ -1,6 +1,4 @@
-# LowPolyPy
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/maschere/6c789d70bbdaed2d89e1742f9d50a508/lowpolypy.ipynb)
+# LowPoly
 
 Generate Low-Poly Versions of Images:
 

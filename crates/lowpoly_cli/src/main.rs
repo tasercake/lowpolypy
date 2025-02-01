@@ -10,7 +10,7 @@ use lowpoly::to_lowpoly;
 /// A simple CLI definition using `clap`.
 #[derive(Parser, Debug)]
 #[command(
-    name = "lowpolypy",
+    name = "lowpoly",
     author,
     version,
     about = "Generate low-poly versions of images"
