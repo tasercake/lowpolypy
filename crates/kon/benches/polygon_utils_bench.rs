@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use image::{ImageBuffer, Rgba};
 
-use lowpoly::polygon_utils::pixels_in_triangles;
+use kon::polygon_utils::pixels_in_triangles;
 
 const IMAGE_DIMENSIONS: (u32, u32) = (400, 400);
 

@@ -5,16 +5,16 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 rust-version = "1.80"
-homepage = "https://github.com/tasercake/lowpolypy/tree/master/lowpolyrs"
-documentation = "https://github.com/tasercake/lowpolypy/tree/master/lowpolyrs/README.md"
-repository = "https://github.com/tasercake/lowpolypy"
+homepage = "https://github.com/tasercake/kon"
+documentation = "https://github.com/tasercake/kon/tree/master/README.md"
+repository = "https://github.com/tasercake/kon"
 authors = ["Krishna Penukonda <krishna@penukonda.me>"]
 license = "MIT"
 
 [workspace.dependencies]
 # 1st-party crates
-lowpoly_cli = { path = "crates/lowpoly_cli" }
-lowpoly = { path = "crates/lowpoly" }
+kon_cli = { path = "crates/kon_cli" }
+kon = { path = "crates/kon" }
 
 # External dependencies
 clap = { version = "4.5.27", features = ["cargo", "derive"] }

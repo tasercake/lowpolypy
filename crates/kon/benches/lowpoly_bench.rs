@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use image::open;
 use image::GenericImageView;
-use lowpoly::to_lowpoly;
+use kon::to_lowpoly;
 
 fn bench_to_lowpoly(c: &mut Criterion) {
     // Load the image

@@ -706,6 +706,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "kon"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "env_logger",
+ "image",
+ "imageproc",
+ "itertools 0.14.0",
+ "log",
+ "num-traits",
+ "rand",
+ "rayon",
+ "spade",
+]
+
+[[package]]
+name = "kon_cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "image",
+ "kon",
+ "log",
+]
+
+[[package]]
 name = "lebe"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -746,33 +773,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fae87c125b03c1d2c0150c90365d7d6bcc53fb73a9acaef207d2d065860f062"
 dependencies = [
  "imgref",
-]
-
-[[package]]
-name = "lowpoly"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "env_logger",
- "image",
- "imageproc",
- "itertools 0.14.0",
- "log",
- "num-traits",
- "rand",
- "rayon",
- "spade",
-]
-
-[[package]]
-name = "lowpoly_cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "env_logger",
- "image",
- "log",
- "lowpoly",
 ]
 
 [[package]]

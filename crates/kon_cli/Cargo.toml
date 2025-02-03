@@ -1,5 +1,5 @@
 [package]
-name = "lowpoly_cli"
+name = "kon_cli"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -10,13 +10,13 @@ authors.workspace = true
 license.workspace = true
 
 [[bin]]
-# Emit a binary named `lowpoly`
-name = "lowpoly"
+# Emit a binary named `kon`
+name = "kon"
 path = "src/main.rs"
 
 [dependencies]
 # 1st-party crates
-lowpoly = { workspace = true }
+kon = { workspace = true }
 
 # External dependencies
 clap = { workspace = true }

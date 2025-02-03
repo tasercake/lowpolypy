@@ -4,13 +4,13 @@ use image::ImageFormat;
 use log::info;
 use std::{fs, path::PathBuf};
 
-use lowpoly::file_utils::{parse_or_infer_destination, validate_image_source};
-use lowpoly::to_lowpoly;
+use kon::file_utils::{parse_or_infer_destination, validate_image_source};
+use kon::to_lowpoly;
 
 /// A simple CLI definition using `clap`.
 #[derive(Parser, Debug)]
 #[command(
-    name = "lowpoly",
+    name = "kon",
     author,
     version,
     about = "Generate low-poly versions of images"

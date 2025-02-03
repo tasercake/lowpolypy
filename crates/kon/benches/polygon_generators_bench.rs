@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use lowpoly::polygon_generators::get_delaunay_polygons;
+use kon::polygon_generators::get_delaunay_polygons;
 
 fn bench_get_delaunay_polygons(c: &mut Criterion) {
     // Example dummy data:

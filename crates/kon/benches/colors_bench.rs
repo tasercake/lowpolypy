@@ -1,8 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use image::Rgba;
-use lowpoly::colors::{
-    find_dominant_color_kmeans, find_dominant_color_median_cut, find_mean_color,
-};
+use kon::colors::{find_dominant_color_kmeans, find_dominant_color_median_cut, find_mean_color};
 use rand::Rng;
 
 fn bench_find_mean_color(c: &mut Criterion) {

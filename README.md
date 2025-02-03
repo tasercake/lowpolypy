@@ -1,4 +1,4 @@
-# LowPoly
+# Kon
 
 Generate Low-Poly Versions of Images:
 
@@ -7,7 +7,7 @@ Generate Low-Poly Versions of Images:
 ## Usage
 
 ```shell
-cargo run --release -p lowpoly_cli ./images/bird.jpg
+cargo run --release -p kon_cli ./images/bird.jpg
 ```
 
 ## Built With
@@ -15,4 +15,4 @@ cargo run --release -p lowpoly_cli ./images/bird.jpg
 - [image](https://crates.io/crates/image) - Basic image processing library
 - [imageproc](https://crates.io/crates/imageproc) - For more advanced image processing & pixel ops
 
-- [OpenAI o1](https://openai.com/o1/) — Helped me figure out the trickly geometry algorithms
+- [OpenAI o1](https://openai.com/o1/) — Helped me figure out the tricky geometry algorithms

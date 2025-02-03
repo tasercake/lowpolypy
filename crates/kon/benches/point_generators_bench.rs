@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use image::{DynamicImage, GenericImage};
-use lowpoly::point_generators::{generate_points_from_sobel, generate_random_points};
+use kon::point_generators::{generate_points_from_sobel, generate_random_points};
 use rand::Rng;
 
 fn bench_generate_points_from_sobel(c: &mut Criterion) {
