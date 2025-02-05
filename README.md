@@ -14,5 +14,3 @@ cargo run --release -p kon_cli ./images/bird.jpg
 
 - [image](https://crates.io/crates/image) - Basic image processing library
 - [imageproc](https://crates.io/crates/imageproc) - For more advanced image processing & pixel ops
-
-- [OpenAI o1](https://openai.com/o1/) — Helped me figure out the tricky geometry algorithms
