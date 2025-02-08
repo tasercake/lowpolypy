@@ -1,0 +1,17 @@
+[package]
+name = "kon_web"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+console_error_panic_hook = "0.1.7"
+leptos = { version = "0.7.5", features = ["csr"] }
+
+[lints]
+workspace = true

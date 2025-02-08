@@ -1,0 +1,3 @@
+[serve]
+port = 5000
+open = true
