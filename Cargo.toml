@@ -24,7 +24,7 @@ imageproc = "0.25.0"
 itertools = "0.14.0"
 log = "0.4.25"
 num-traits = "0.2.19"
-rand = "0.8.5"
+rand = "0.9.3"
 rayon = "1.10.0"
 spade = "2.12.1"
 
